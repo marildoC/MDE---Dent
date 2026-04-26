@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
+  activateWorkflow,
+  archiveWorkflow,
   createAdviceBoundary,
   createCareStage,
   createEscalationRule,
@@ -13,6 +15,7 @@ import {
   listSymptomDefinitions,
   listSymptomRules,
   updateWorkflow,
+  validateWorkflow,
 } from '../api/workflows.js'
 import { useAuth } from '../auth/useAuth.js'
 
@@ -86,6 +89,7 @@ export default function WorkflowDetailPage() {
   const [boundaryForm, setBoundaryForm] = useState(emptyBoundary)
   const [escalationForm, setEscalationForm] = useState(emptyEscalation)
   const [error, setError] = useState('')
+  const [validationResult, setValidationResult] = useState(null)
 
   const fetchWorkflowData = useCallback(async () => {
     const [
@@ -187,6 +191,29 @@ export default function WorkflowDetailPage() {
     }
   }
 
+  async function runLifecycleAction(callback) {
+    setError('')
+    try {
+      const result = await callback()
+      setValidationResult(result.is_valid === undefined ? null : result)
+      await loadData()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const handleValidate = () => {
+    runLifecycleAction(() => validateWorkflow(workflowId))
+  }
+
+  const handleActivate = () => {
+    runLifecycleAction(() => activateWorkflow(workflowId))
+  }
+
+  const handleArchive = () => {
+    runLifecycleAction(() => archiveWorkflow(workflowId))
+  }
+
   const submitWorkflow = (event) => {
     event.preventDefault()
     submitAndReload(() => updateWorkflow(workflowId, workflowForm))
@@ -265,12 +292,17 @@ export default function WorkflowDetailPage() {
     )
   }
 
+  const isActive = workflow.status === 'ACTIVE'
+
   return (
     <main className="app-shell">
       <header className="top-bar">
         <div>
           <p className="eyebrow">Workflow draft</p>
           <h1>{workflow.name}</h1>
+          <span className={`status-badge status-${workflow.status.toLowerCase()}`}>
+            {workflow.status}
+          </span>
         </div>
         <div className="button-row">
           <Link className="secondary-link" to="/admin/workflows">
@@ -286,10 +318,35 @@ export default function WorkflowDetailPage() {
 
       <div className="workflow-grid">
         <Section title="Workflow">
+          <div className="lifecycle-panel">
+            <div className="button-row">
+              <button className="primary-button" type="button" onClick={handleValidate}>
+                Validate
+              </button>
+              <button
+                className="secondary-button"
+                disabled={workflow.status !== 'VALIDATED'}
+                type="button"
+                onClick={handleActivate}
+              >
+                Activate
+              </button>
+              <button
+                className="secondary-button"
+                disabled={workflow.status !== 'ACTIVE'}
+                type="button"
+                onClick={handleArchive}
+              >
+                Archive
+              </button>
+            </div>
+            {validationResult ? <ValidationResult result={validationResult} /> : null}
+          </div>
           <form className="panel-form compact-form" onSubmit={submitWorkflow}>
             <label>
               Name
               <input
+                disabled={isActive}
                 name="name"
                 onChange={(event) =>
                   setWorkflowForm((current) => ({ ...current, name: event.target.value }))
@@ -301,6 +358,7 @@ export default function WorkflowDetailPage() {
             <label>
               Description
               <textarea
+                disabled={isActive}
                 name="description"
                 onChange={(event) =>
                   setWorkflowForm((current) => ({
@@ -578,6 +636,28 @@ export default function WorkflowDetailPage() {
         </Section>
       </div>
     </main>
+  )
+}
+
+function ValidationResult({ result }) {
+  return (
+    <section className={result.is_valid ? 'validation-box is-valid' : 'validation-box is-invalid'}>
+      <strong>{result.is_valid ? 'Workflow is valid.' : 'Workflow needs changes.'}</strong>
+      {result.errors?.length ? (
+        <ul>
+          {result.errors.map((message) => (
+            <li key={message}>{message}</li>
+          ))}
+        </ul>
+      ) : null}
+      {result.warnings?.length ? (
+        <ul>
+          {result.warnings.map((message) => (
+            <li key={message}>{message}</li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   )
 }
 

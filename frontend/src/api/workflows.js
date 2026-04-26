@@ -45,6 +45,27 @@ export function updateWorkflow(id, payload) {
   return updateResource(`/workflows/treatment-workflows/${id}/`, payload)
 }
 
+export function validateWorkflow(id) {
+  return api(`/workflows/treatment-workflows/${id}/validate/`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export function activateWorkflow(id) {
+  return api(`/workflows/treatment-workflows/${id}/activate/`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export function archiveWorkflow(id) {
+  return api(`/workflows/treatment-workflows/${id}/archive/`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
 export function listCareStages() {
   return api('/workflows/care-stages/')
 }

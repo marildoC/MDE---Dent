@@ -88,8 +88,13 @@
 }
 
 .primary-button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.72;
+}
+
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .secondary-button {
@@ -178,10 +183,20 @@
   gap: 10px;
 }
 
+.dashboard-actions {
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
 .split-layout,
 .workflow-grid {
   max-width: 1040px;
   margin: 0 auto;
+}
+
+.stacked-panels {
+  display: grid;
+  gap: 20px;
 }
 
 .split-layout {
@@ -211,6 +226,14 @@
 }
 
 .panel-form label {
+  display: grid;
+  gap: 8px;
+  color: #293b37;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.compact-form label {
   display: grid;
   gap: 8px;
   color: #293b37;
@@ -272,6 +295,12 @@
   padding: 12px;
 }
 
+.resource-list small {
+  color: #607872;
+  display: block;
+  margin-top: 3px;
+}
+
 .resource-list a {
   color: #1d6f60;
   font-weight: 700;
@@ -290,6 +319,96 @@
 
 .muted-text {
   color: #607872;
+}
+
+.case-summary {
+  display: grid;
+  gap: 18px;
+}
+
+.case-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.report-section {
+  display: grid;
+  gap: 22px;
+  margin-top: 24px;
+}
+
+.report-form,
+.report-history {
+  border-top: 1px solid #e3ebe8;
+  padding-top: 18px;
+}
+
+.success-message {
+  margin: 0;
+  border-left: 4px solid #1d6f60;
+  background: #edf8f3;
+  color: #155f45;
+  padding: 10px 12px;
+}
+
+.nested-report-list {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+}
+
+.status-badge {
+  display: inline-flex;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  margin-top: 10px;
+  padding: 5px 9px;
+}
+
+.status-draft {
+  background: #edf2f7;
+  color: #344054;
+}
+
+.status-validated {
+  background: #e8f1ee;
+  color: #1d6f60;
+}
+
+.status-active {
+  background: #e6f0ff;
+  color: #174ea6;
+}
+
+.status-archived {
+  background: #f2eaea;
+  color: #8a1f16;
+}
+
+.lifecycle-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.validation-box {
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.validation-box ul {
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+
+.is-valid {
+  background: #edf8f3;
+  color: #155f45;
+}
+
+.is-invalid {
+  background: #fff2f0;
+  color: #8a1f16;
 }
 
 @media (max-width: 720px) {
