@@ -1,6 +1,8 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+export const ACCESS_TOKEN_KEY = 'dentcare_access_token'
+export const REFRESH_TOKEN_KEY = 'dentcare_refresh_token'
 
-async function request(path, options = {}) {
+export async function request(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
@@ -31,4 +33,8 @@ export function fetchCurrentUser(accessToken) {
       Authorization: `Bearer ${accessToken}`,
     },
   })
+}
+
+export function getAccessToken() {
+  return localStorage.getItem(ACCESS_TOKEN_KEY)
 }

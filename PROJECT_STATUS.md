@@ -46,17 +46,29 @@ The system is workflow-driven dental follow-up.
   - Patient Dashboard
   - Dentist/Staff Dashboard
   - Admin Dashboard
+- workflows Django app created
+- structured workflow models added:
+  - TreatmentWorkflow
+  - CareStage
+  - SymptomDefinition
+  - SymptomRule
+  - AIAdviceBoundary
+  - EscalationRule
+- workflow models registered in Django admin
+- admin-protected workflow APIs added
+- workflow model migrations created and applied
+- frontend admin workflow management pages added
 
 ## Current project stage
-Foundation/authentication milestone implemented and passing checks.
-Business logic has not started yet.
+Workflow Modeling Core implemented and passing checks.
+Runtime business logic has not started yet.
 
 ## Current active milestone
-Milestone 1 - Foundation completion
+Milestone 2 - Workflow Modeling Core
 
 ## Immediate next objective
-Confirm or create real local users for patient, dentist, and admin manual login testing.
-After manual role-flow verification, move to Milestone 2 - Workflow Modeling Core.
+Manually verify admin workflow creation in the browser.
+After that, refine the plan for Milestone 3 - Workflow Validation and Lifecycle.
 
 ## Fixed design decisions
 - First complete workflow: Post-Extraction Follow-Up
@@ -67,7 +79,6 @@ After manual role-flow verification, move to Milestone 2 - Workflow Modeling Cor
 - Image upload is supporting evidence only
 
 ## What is intentionally not implemented yet
-- workflow modeling
 - workflow validation
 - patient follow-up cases
 - symptom reports

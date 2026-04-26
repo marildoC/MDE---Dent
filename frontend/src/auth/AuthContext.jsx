@@ -4,11 +4,13 @@ import {
   useMemo,
   useState,
 } from 'react'
-import { fetchCurrentUser, loginRequest } from '../api/auth.js'
+import {
+  ACCESS_TOKEN_KEY,
+  REFRESH_TOKEN_KEY,
+  fetchCurrentUser,
+  loginRequest,
+} from '../api/auth.js'
 import { AuthContext } from './AuthContext.js'
-
-const ACCESS_TOKEN_KEY = 'dentcare_access_token'
-const REFRESH_TOKEN_KEY = 'dentcare_refresh_token'
 
 export function AuthProvider({ children }) {
   const [initialAccessToken] = useState(() => localStorage.getItem(ACCESS_TOKEN_KEY))

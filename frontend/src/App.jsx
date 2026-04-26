@@ -8,6 +8,8 @@ import {
   PatientDashboard,
   StaffDashboard,
 } from './pages/Dashboards.jsx'
+import WorkflowDetailPage from './pages/WorkflowDetailPage.jsx'
+import WorkflowListPage from './pages/WorkflowListPage.jsx'
 
 function RoleRedirect() {
   return (
@@ -56,6 +58,22 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['ADMIN']}>
                 <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/workflows"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <WorkflowListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/workflows/:workflowId"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <WorkflowDetailPage />
               </ProtectedRoute>
             }
           />

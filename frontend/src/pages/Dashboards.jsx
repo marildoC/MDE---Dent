@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth.js'
 
 const dashboardCopy = {
@@ -38,6 +39,11 @@ function DashboardLayout({ variant }) {
         <div>
           <p className="eyebrow">{copy.eyebrow}</p>
           <h2>{copy.body}</h2>
+          {variant === 'admin' ? (
+            <Link className="primary-link" to="/admin/workflows">
+              Workflow management
+            </Link>
+          ) : null}
         </div>
         <dl className="identity-list">
           <div>
