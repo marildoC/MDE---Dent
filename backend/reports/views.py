@@ -16,6 +16,9 @@ class SymptomReportViewSet(ModelViewSet):
         "follow_up_case__patient__user",
         "follow_up_case__workflow",
         "follow_up_case__assigned_staff",
+        "risk_assessment",
+        "risk_assessment__advice_message",
+        "risk_assessment__detected_stage",
         "submitted_by",
     )
 

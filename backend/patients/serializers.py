@@ -1,10 +1,14 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from accounts.models import User, UserRole
+from audit import actions as audit_actions
+from audit.services import record_audit
 from workflows.models import WorkflowStatus
 from workflows.serializers import TreatmentWorkflowSerializer
 
-from .models import FollowUpCase, PatientProfile
+from .lifecycle import validate_follow_up_case_transition
+from .models import FollowUpCase, FollowUpCaseStatus, PatientProfile
 
 
 class PatientUserSerializer(serializers.ModelSerializer):
@@ -76,3 +80,56 @@ class FollowUpCaseSerializer(serializers.ModelSerializer):
         if assigned_staff and assigned_staff.role not in {UserRole.DENTIST, UserRole.ADMIN}:
             raise serializers.ValidationError("Assigned staff must be DENTIST or ADMIN.")
         return assigned_staff
+
+    def validate(self, attrs):
+        status = attrs.get("status")
+        if self.instance is None and status and status not in {
+            FollowUpCaseStatus.CREATED,
+            FollowUpCaseStatus.ACTIVE,
+        }:
+            raise serializers.ValidationError(
+                {"status": "Follow-up cases must start as CREATED or ACTIVE."}
+            )
+        if self.instance is not None and status:
+            try:
+                validate_follow_up_case_transition(self.instance.status, status)
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError({"status": exc.message}) from exc
+        return attrs
+
+    def create(self, validated_data):
+        follow_up_case = super().create(validated_data)
+        request = self.context.get("request")
+        record_audit(
+            request.user if request else None,
+            audit_actions.FOLLOW_UP_CASE_CREATED,
+            follow_up_case,
+            {
+                "patient_id": follow_up_case.patient_id,
+                "workflow_id": follow_up_case.workflow_id,
+                "assigned_staff_id": follow_up_case.assigned_staff_id,
+                "status": follow_up_case.status,
+            },
+        )
+        return follow_up_case
+
+    def update(self, instance, validated_data):
+        previous_status = instance.status
+        follow_up_case = super().update(instance, validated_data)
+        next_status = follow_up_case.status
+
+        if previous_status != next_status:
+            request = self.context.get("request")
+            record_audit(
+                request.user if request else None,
+                audit_actions.FOLLOW_UP_CASE_STATUS_CHANGED,
+                follow_up_case,
+                {
+                    "patient_id": follow_up_case.patient_id,
+                    "workflow_id": follow_up_case.workflow_id,
+                    "previous_status": previous_status,
+                    "new_status": next_status,
+                },
+            )
+
+        return follow_up_case

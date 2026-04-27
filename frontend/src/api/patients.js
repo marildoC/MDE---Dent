@@ -26,6 +26,10 @@ export function getMyActiveCase() {
   return api('/patients/my-active-case/')
 }
 
+export function listMyFollowUpCases() {
+  return api('/patients/my-follow-up-cases/')
+}
+
 export function listPatientUsers() {
   return api('/patients/patient-users/')
 }

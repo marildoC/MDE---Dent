@@ -45,6 +45,11 @@ INSTALLED_APPS = [
     'workflows',
     'patients',
     'reports',
+    'decision_engine',
+    'ai_support',
+    'escalations',
+    'appointments',
+    'audit',
 ]
 
 AUTH_USER_MODEL = "accounts.User"

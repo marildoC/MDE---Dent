@@ -78,17 +78,56 @@ The system is workflow-driven dental follow-up.
 - patient symptom report submission added
 - patient report history display added
 - staff/admin symptom report visibility added
+- decision_engine Django app created
+- deterministic symptom report assessment service added
+- persistent risk assessments added
+- risk assessment API added
+- patient and staff/admin risk assessment display added
+- ai_support Django app created
+- persistent bounded advice messages added
+- deterministic template-based advice generation added
+- advice generation API added
+- new risk assessments create bounded advice downstream
+- patient and staff/admin advice display added
+- escalations Django app created
+- persistent escalation cases added
+- HIGH and URGENT risk assessments create staff escalations automatically
+- staff/admin escalation queue and review updates added
+- patient escalation status/response display added
+- appointments Django app created
+- persistent appointment records added
+- staff/admin appointment creation and updates added for escalations
+- appointment priority defaults from risk assessment/escalation context
+- patient appointment status display added
+- follow-up case lifecycle rules centralized and enforced
+- escalation status transitions enforced
+- appointment status transitions enforced
+- terminal follow-up cases block new symptom reports
+- appointment completion resolves linked follow-up cases
+- patient/staff UI guards added for terminal and invalid lifecycle actions
+- audit Django app created
+- persistent audit log model added and migrated
+- stable audit action constants added
+- audit recording helper added
+- important workflow/runtime actions now create structured audit logs
+- admin-only audit log API added
+- audit logs registered in Django admin
+- minimal admin audit log frontend page added
 
 ## Current project stage
-Symptom Reporting implemented and passing checks.
-Decision runtime has not started yet.
+Audit and Decision Logging implemented and passing checks.
+Testing and Reliability completion has not started yet.
 
 ## Current active milestone
-Milestone 5 - Symptom Reporting
+Milestone 11 - Audit and Decision Logging
 
 ## Immediate next objective
-Manually verify symptom report submission, patient report history, and staff/admin report visibility in the browser.
-After that, refine the plan for Milestone 6 - Decision Engine and Risk Assessment.
+Manually verify audit log visibility in the browser as admin:
+- workflow lifecycle actions create visible audit rows
+- patient report submission creates report/risk/advice/escalation audit rows
+- escalation and appointment updates create audit rows
+- patient users cannot access audit logs
+After that, refine the plan for Milestone 12 - Testing and Reliability.
 
 ## Fixed design decisions
 - First complete workflow: Post-Extraction Follow-Up
@@ -99,12 +138,9 @@ After that, refine the plan for Milestone 6 - Decision Engine and Risk Assessmen
 - Image upload is supporting evidence only
 
 ## What is intentionally not implemented yet
-- decision engine
-- risk assessment
-- bounded advice module
-- escalation logic
-- appointment priority
-- audit log
+- testing and reliability completion
+- UI completion and demo polish
+- report and diagram alignment
 - cloud deployment
 
 ## Known cautions

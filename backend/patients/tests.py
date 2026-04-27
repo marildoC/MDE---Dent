@@ -163,6 +163,63 @@ class PatientFollowUpRuntimeTests(APITestCase):
         case.refresh_from_db()
         self.assertEqual(case.notes, "Reviewed by staff.")
 
+    def test_staff_can_apply_valid_follow_up_case_transition(self):
+        profile = PatientProfile.objects.create(user=self.patient_user)
+        case = FollowUpCase.objects.create(
+            patient=profile,
+            workflow=self.active_workflow,
+            treatment_date=date(2026, 4, 26),
+        )
+        self.client.force_authenticate(self.dentist)
+
+        response = self.client.patch(
+            f"/api/patients/follow-up-cases/{case.id}/",
+            {"status": FollowUpCaseStatus.MONITORING},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        case.refresh_from_db()
+        self.assertEqual(case.status, FollowUpCaseStatus.MONITORING)
+
+    def test_invalid_follow_up_case_transition_is_rejected(self):
+        profile = PatientProfile.objects.create(user=self.patient_user)
+        case = FollowUpCase.objects.create(
+            patient=profile,
+            workflow=self.active_workflow,
+            treatment_date=date(2026, 4, 26),
+        )
+        self.client.force_authenticate(self.dentist)
+
+        response = self.client.patch(
+            f"/api/patients/follow-up-cases/{case.id}/",
+            {"status": FollowUpCaseStatus.CLOSED},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        case.refresh_from_db()
+        self.assertEqual(case.status, FollowUpCaseStatus.ACTIVE)
+
+    def test_patient_cannot_update_follow_up_case_status(self):
+        profile = PatientProfile.objects.create(user=self.patient_user)
+        case = FollowUpCase.objects.create(
+            patient=profile,
+            workflow=self.active_workflow,
+            treatment_date=date(2026, 4, 26),
+        )
+        self.client.force_authenticate(self.patient_user)
+
+        response = self.client.patch(
+            f"/api/patients/follow-up-cases/{case.id}/",
+            {"status": FollowUpCaseStatus.MONITORING},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        case.refresh_from_db()
+        self.assertEqual(case.status, FollowUpCaseStatus.ACTIVE)
+
     def test_my_active_case_returns_own_case_or_null(self):
         profile = PatientProfile.objects.create(user=self.patient_user)
         case = FollowUpCase.objects.create(
@@ -182,3 +239,42 @@ class PatientFollowUpRuntimeTests(APITestCase):
         self.assertEqual(case_response.data["workflow_detail"]["name"], self.active_workflow.name)
         self.assertEqual(null_response.status_code, 200)
         self.assertIsNone(null_response.data)
+
+    def test_my_follow_up_cases_returns_own_non_closed_cases_only(self):
+        profile = PatientProfile.objects.create(user=self.patient_user)
+        other_profile = PatientProfile.objects.create(user=self.other_patient_user)
+        older_case = FollowUpCase.objects.create(
+            patient=profile,
+            workflow=self.active_workflow,
+            treatment_date=date(2026, 4, 20),
+        )
+        newer_case = FollowUpCase.objects.create(
+            patient=profile,
+            workflow=self.active_workflow,
+            treatment_date=date(2026, 4, 26),
+        )
+        FollowUpCase.objects.create(
+            patient=profile,
+            workflow=self.active_workflow,
+            treatment_date=date(2026, 4, 27),
+            status=FollowUpCaseStatus.CLOSED,
+        )
+        FollowUpCase.objects.create(
+            patient=other_profile,
+            workflow=self.active_workflow,
+            treatment_date=date(2026, 4, 26),
+        )
+        self.client.force_authenticate(self.patient_user)
+
+        response = self.client.get("/api/patients/my-follow-up-cases/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["id"] for item in response.data], [newer_case.id, older_case.id])
+
+    def test_staff_my_follow_up_cases_returns_empty_list(self):
+        self.client.force_authenticate(self.dentist)
+
+        response = self.client.get("/api/patients/my-follow-up-cases/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])

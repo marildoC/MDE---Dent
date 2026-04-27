@@ -3,6 +3,7 @@ import './App.css'
 import { AuthProvider } from './auth/AuthContext.jsx'
 import AppErrorBoundary from './components/AppErrorBoundary.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
+import AuditLogPage from './pages/AuditLogPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import {
   AdminDashboard,
@@ -77,6 +78,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['ADMIN']}>
                   <WorkflowDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/audit"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN']}>
+                  <AuditLogPage />
                 </ProtectedRoute>
               }
             />

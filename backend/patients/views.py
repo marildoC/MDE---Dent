@@ -99,3 +99,24 @@ def my_active_case(request):
         return Response(None)
 
     return Response(FollowUpCaseSerializer(case).data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_follow_up_cases(request):
+    if request.user.role != UserRole.PATIENT:
+        return Response([])
+
+    cases = (
+        FollowUpCase.objects.select_related(
+            "patient",
+            "patient__user",
+            "workflow",
+            "assigned_staff",
+        )
+        .filter(patient__user=request.user)
+        .exclude(status=FollowUpCaseStatus.CLOSED)
+        .order_by("-treatment_date", "-id")
+    )
+
+    return Response(FollowUpCaseSerializer(cases, many=True).data)

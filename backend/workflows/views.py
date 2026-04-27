@@ -6,6 +6,8 @@ from rest_framework.viewsets import ModelViewSet
 
 from accounts.models import UserRole
 from accounts.permissions import IsAdminOrDentistReadOnly, IsAdminRole
+from audit import actions as audit_actions
+from audit.services import record_audit
 
 from .models import (
     AIAdviceBoundary,
@@ -68,10 +70,21 @@ class TreatmentWorkflowViewSet(AdminWorkflowViewSet):
     def validate_workflow_action(self, request, pk=None):
         workflow = self.get_object()
         result = validate_workflow(workflow)
+        previous_status = workflow.status
 
         if result["is_valid"] and workflow.status == WorkflowStatus.DRAFT:
             workflow.status = WorkflowStatus.VALIDATED
             workflow.save(update_fields=["status", "updated_at"])
+            record_audit(
+                request.user,
+                audit_actions.WORKFLOW_VALIDATED,
+                workflow,
+                {
+                    "previous_status": previous_status,
+                    "new_status": workflow.status,
+                    "workflow_id": workflow.id,
+                },
+            )
 
         return Response(
             {
@@ -104,6 +117,16 @@ class TreatmentWorkflowViewSet(AdminWorkflowViewSet):
 
         workflow.status = WorkflowStatus.ACTIVE
         workflow.save(update_fields=["status", "updated_at"])
+        record_audit(
+            request.user,
+            audit_actions.WORKFLOW_ACTIVATED,
+            workflow,
+            {
+                "previous_status": WorkflowStatus.VALIDATED,
+                "new_status": workflow.status,
+                "workflow_id": workflow.id,
+            },
+        )
         return Response({"status": workflow.status})
 
     @action(detail=True, methods=["post"])
@@ -120,6 +143,16 @@ class TreatmentWorkflowViewSet(AdminWorkflowViewSet):
 
         workflow.status = WorkflowStatus.ARCHIVED
         workflow.save(update_fields=["status", "updated_at"])
+        record_audit(
+            request.user,
+            audit_actions.WORKFLOW_ARCHIVED,
+            workflow,
+            {
+                "previous_status": WorkflowStatus.ACTIVE,
+                "new_status": workflow.status,
+                "workflow_id": workflow.id,
+            },
+        )
         return Response({"status": workflow.status})
 
 

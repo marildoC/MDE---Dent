@@ -25,6 +25,11 @@ urlpatterns = [
     path('api/workflows/', include('workflows.urls')),
     path('api/patients/', include('patients.urls')),
     path('api/reports/', include('reports.urls')),
+    path('api/decision-engine/', include('decision_engine.urls')),
+    path('api/ai-support/', include('ai_support.urls')),
+    path('api/escalations/', include('escalations.urls')),
+    path('api/appointments/', include('appointments.urls')),
+    path('api/audit/', include('audit.urls')),
 ]
 
 if settings.DEBUG:

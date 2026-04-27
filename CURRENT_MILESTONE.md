@@ -1,308 +1,281 @@
 # CURRENT_MILESTONE.md
 
 ## Milestone Name
-
-Milestone 5 - Symptom Reporting
+Milestone 11 - Audit and Decision Logging
 
 ## Goal
+Add persistent audit logging for important DentCare-MDE actions across the existing workflow/runtime chain.
 
-Allow patients to submit fixed-field Post-Extraction symptom reports connected to their own active follow-up case.
+The audit trail should record:
+- who acted
+- what action occurred
+- what object was affected
+- when it happened
+- safe structured metadata about the event
 
-By the end of this milestone:
-
-- a patient with an active follow-up case can submit a symptom report
-- the report is persisted in the backend
-- the patient can view their own report history
-- dentist/admin users can view submitted reports
-- no risk decision, advice, escalation, appointment, or audit behavior is created yet
-
-This milestone captures patient recovery data only.
+This milestone must not change workflow validation, risk decisions, advice generation, escalation behavior, appointment behavior, or case lifecycle rules.
 
 ## Why This Milestone Matters
+DentCare-MDE is a model-driven dental follow-up system. Workflow models drive patient reports, deterministic decisions, advice, escalations, staff actions, appointment priority, and case lifecycle changes.
 
-Milestone 4 connected patient users to active workflows through:
+Audit logging makes that chain traceable:
 
-`User -> PatientProfile -> FollowUpCase`
+workflow model -> validation -> follow-up case -> symptom report -> deterministic decision -> bounded advice/escalation -> staff action -> appointment priority -> audit trace
 
-Milestone 5 creates the next runtime input:
-
-`FollowUpCase -> SymptomReport`
-
-The decision engine in a later milestone will evaluate these reports against the active workflow rules. This milestone must therefore store clean, permission-safe report data without starting deterministic risk evaluation early.
-
-## Current Repository State
-
-Already implemented:
-
-- `accounts` app with custom user roles: `PATIENT`, `DENTIST`, `ADMIN`
-- JWT login and current-user API
-- role-protected frontend routing
-- `workflows` app with workflow models, validation, lifecycle actions, and admin workflow UI
-- `patients` app with `PatientProfile` and `FollowUpCase`
-- active workflow assignment enforcement
-- patient dashboard active-case display
-- staff/admin follow-up case management UI
-
-Not implemented yet:
-
-- no `reports` app exists
-- no `SymptomReport` model exists
-- no report API exists
-- no patient symptom report form exists
-- no report history UI exists
-- no staff/admin report visibility exists
-
-Current git caution:
-
-- Milestone 4 files are still present as uncommitted/untracked changes.
-- Build on the current working tree; do not revert Milestone 4 work.
+This supports debugging, staff trust, testing, and the SWE/MDD report.
 
 ## In Scope
+- Create a new backend `audit` app.
+- Add persistent `AuditLog` model.
+- Add stable audit action constants.
+- Add a reusable audit recording helper/service.
+- Register audit logs in Django admin.
+- Add a read-only audit API for admin users.
+- Record audit events going forward from existing stable backend points.
+- Add focused backend tests for audit creation, permissions, and sensitive-detail avoidance.
+- Add a simple admin-only frontend audit log page if backend work is complete and the UI change remains small.
+- Update `PROJECT_STATUS.md` after implementation.
 
-- Create a new backend `reports` app.
-- Add a fixed-field `SymptomReport` model.
-- Link each report to `patients.FollowUpCase`.
-- Record the authenticated patient user as `submitted_by`.
-- Calculate `day_after_treatment` from the follow-up case treatment date on the backend.
-- Allow patients to submit reports only for their own active/non-closed follow-up case.
-- Allow patients to view only their own report history.
-- Allow dentist/admin users to view reports.
-- Add optional image upload as supporting evidence only.
-- Add Django admin registration for reports.
-- Add report API helpers in the frontend.
-- Add patient-facing symptom report form.
-- Add patient report history display.
-- Add staff/admin report visibility in the follow-up case management area.
-- Add focused backend tests for permissions, validation, and report creation.
-
-## Out Of Scope
-
-- Decision engine.
-- Risk assessment.
-- Workflow rule matching.
-- Risk level selection.
-- Bounded AI/advice responses.
-- Automatic escalation.
-- Appointment priority.
-- Audit logging.
-- Dynamic forms generated from `SymptomDefinition`.
-- Image diagnosis or AI image interpretation.
+## Out of Scope
+- Changing business logic from Milestones 1-10.
+- Changing workflow validation rules.
+- Changing decision-engine risk evaluation.
+- Changing bounded advice templates.
+- Changing escalation creation rules.
+- Changing appointment lifecycle behavior.
 - Notifications.
-- User registration or demo-data seeding.
-- Full clinic-management features.
+- Real-time event streaming.
+- Analytics dashboards.
+- Export/reporting tools.
+- External immutable log storage.
+- Backfilling audit logs for existing database records.
+- Patient-facing audit timeline.
+- Complex dentist-specific audit filtering.
 
 ## Backend Work
 
-Create a new app:
+### 1. Create Audit App
+Create a new Django app:
 
-- `backend/reports/`
+- `backend/audit/`
 
 Register it in:
 
 - `backend/core/settings.py`
 - `backend/core/urls.py`
 
-Add model:
+API path:
 
-- `SymptomReport`
+- `/api/audit/logs/`
 
-Fields:
+### 2. Add AuditLog Model
+Add `AuditLog` with:
 
-- `follow_up_case`: FK to `patients.FollowUpCase`
-- `submitted_by`: FK to `accounts.User`
-- `day_after_treatment`: non-negative integer
-- `pain_level`: integer, 0 to 10
-- `swelling`: controlled choices: `NONE`, `MILD`, `SEVERE`
-- `bleeding`: controlled choices: `NONE`, `MILD`, `SEVERE`
-- `fever`: boolean
-- `bad_smell`: boolean
-- `notes`: optional text
-- `image`: optional image/file upload
+- `actor`: nullable FK to user
+- `action`: stable string action
+- `target_type`: string
+- `target_id`: string
+- `target_repr`: short readable label
+- `details`: JSON field, default dict
+- `created_at`: timestamp
+
+Ordering:
+
+- newest first
+
+Create and apply migration.
+
+### 3. Add Action Constants
+Create stable constants, likely in `backend/audit/actions.py`.
+
+Required actions:
+
+- `WORKFLOW_VALIDATED`
+- `WORKFLOW_ACTIVATED`
+- `WORKFLOW_ARCHIVED`
+- `FOLLOW_UP_CASE_CREATED`
+- `FOLLOW_UP_CASE_STATUS_CHANGED`
+- `SYMPTOM_REPORT_SUBMITTED`
+- `RISK_ASSESSMENT_CREATED`
+- `ADVICE_CREATED`
+- `ESCALATION_CREATED`
+- `ESCALATION_UPDATED`
+- `APPOINTMENT_CREATED`
+- `APPOINTMENT_UPDATED`
+
+Use constants, not scattered raw strings.
+
+### 4. Add Audit Service
+Create `record_audit(actor, action, target, details=None)`.
+
+Behavior:
+- Accept `actor=None` for system-generated events.
+- Derive `target_type`, `target_id`, and `target_repr` from the target object.
+- Store `details` as safe structured metadata.
+- Do not swallow programming errors with broad silent exception handling.
+- Do not add an event bus or signal-heavy architecture.
+
+### 5. Integrate Audit Calls
+Add audit calls at stable points:
+
+- Workflow lifecycle actions in `workflows.views`
+  - validate
+  - activate
+  - archive
+
+- Follow-up case creation/status change in `patients`
+  - serializer/view update path
+  - lifecycle helper/service where status transitions are applied
+
+- Symptom report submission in `reports.serializers`
+  - after report is created
+
+- Risk assessment creation in `decision_engine.services`
+  - after `RiskAssessment.objects.create`
+
+- Advice creation in `ai_support.services`
+  - after `AdviceMessage.objects.create`
+
+- Escalation creation/update in `escalations.services` and/or serializer update path
+
+- Appointment creation/update in `appointments.services` and serializer update path
+
+Avoid duplicate audit rows when a service is idempotent and returns an existing object.
+
+### 6. Sensitive Data Rules
+Do not store full free-text clinical content in audit details.
+
+Avoid:
+- full symptom report notes
+- full dental notes
+- full staff response
+- full advice message
+- image file contents or paths
+
+Prefer:
+- object IDs
+- old/new status
+- risk level
+- recommended action
+- appointment priority
+- matched rule IDs
+- workflow ID
+- follow-up case ID
+- patient profile ID
+- assigned staff ID
+
+### 7. Audit API
+Add read-only DRF serializer/viewset.
+
+Access:
+- Admin users can list/retrieve audit logs.
+- Dentist/staff access is out of scope for this milestone unless a simple safe filter is already obvious.
+- Patients cannot access audit logs.
+- Unauthenticated users cannot access audit logs.
+
+Optional simple filters:
+- `action`
+- `target_type`
+- `target_id`
+- `actor`
+
+Do not add search, export, analytics, or complex reporting.
+
+### 8. Django Admin
+Register `AuditLog`.
+
+Useful list fields:
 - `created_at`
-- `updated_at`
-
-Backend rules:
-
-- only authenticated `PATIENT` users can create reports
-- report creation must use a follow-up case owned by the authenticated patient
-- reports cannot be submitted for another patient’s case
-- reports cannot be submitted for `CLOSED` or `RESOLVED` cases
-- staff/admin can view reports but cannot submit reports as patients
-- backend calculates `day_after_treatment`; frontend must not be trusted for it
-- image is stored only as supporting evidence and is not interpreted
-
-API shape:
-
-- `GET /api/reports/symptom-reports/`
-  - patient: list own reports
-  - dentist/admin: list reports
-- `POST /api/reports/symptom-reports/`
-  - patient only
-- `GET /api/reports/symptom-reports/{id}/`
-  - patient can retrieve own report
-  - dentist/admin can retrieve reports
-- optional query filtering:
-  - `?follow_up_case=<id>` for staff/admin and for the owning patient
-
-Keep the API simple. Do not add separate `my-reports` endpoint unless it meaningfully simplifies the frontend.
-
-Serializer behavior:
-
-- expose nested basic case details read-only if useful for UI
-- keep `submitted_by` and `day_after_treatment` read-only
-- validate pain level and choice fields
-- validate ownership and case status server-side
-
-Admin:
-
-- register `SymptomReport`
-- show patient, follow-up case, day, pain level, fever, bad smell, created date
-
-Backend tests:
-
-- patient can create a report for own active follow-up case
-- patient cannot create a report for another patient’s case
-- patient cannot submit for `CLOSED` case
-- patient cannot submit for `RESOLVED` case
-- patient can list/retrieve own reports
-- patient cannot list/retrieve another patient’s reports
-- dentist/admin can list/retrieve reports
-- dentist/admin cannot create patient symptom reports
-- invalid pain level is rejected
-- invalid swelling/bleeding choices are rejected
-- image is optional
+- `action`
+- `actor`
+- `target_type`
+- `target_id`
+- `target_repr`
 
 ## Frontend Work
+Add a minimal admin-only audit page only after backend audit API is working.
 
-Add report API helper module:
+Expected frontend impact:
+- `frontend/src/api/audit.js`
+- a simple `AuditLogPage.jsx`
+- admin dashboard link
+- protected route for `ADMIN`
 
-- `frontend/src/api/reports.js`
+Display:
+- timestamp
+- action
+- actor
+- target type
+- target label/id
+- compact details
 
-Add helpers for:
+Do not expose audit logs to patients.
+Do not build charts, exports, advanced filters, or patient timelines.
 
-- list symptom reports
-- create symptom report
-- optional list by follow-up case
-
-Patient UI:
-
-- extend `PatientDashboard` or add a small patient report section under the active case summary
-- show a `Submit symptom report` form only when an active case exists
-- form fields:
-  - pain level 0-10
-  - swelling dropdown
-  - bleeding dropdown
-  - fever yes/no
-  - bad smell/taste yes/no
-  - notes
-  - optional image upload, if backend upload handling is implemented in this milestone
-- after submission:
-  - refresh report history
-  - show success message
-  - do not show risk, advice, escalation, or diagnosis
-
-Patient report history:
-
-- show submitted date
-- day after treatment
-- pain level
-- swelling
-- bleeding
-- fever
-- bad smell
-- notes summary if present
-
-Staff/admin UI:
-
-- extend `FollowUpManagementPage`
-- show reports associated with follow-up cases
-- keep the display simple and read-only
-- do not add staff decision actions yet
+If backend audit work takes longer than expected, frontend audit UI may be deferred, but the backend API and Django admin visibility must be completed.
 
 ## Expected File/Module Impact
-
-Backend expected changes:
-
-- new `backend/reports/` app
+Backend:
+- `backend/audit/models.py`
+- `backend/audit/actions.py`
+- `backend/audit/services.py`
+- `backend/audit/serializers.py`
+- `backend/audit/views.py`
+- `backend/audit/urls.py`
+- `backend/audit/admin.py`
+- `backend/audit/tests.py`
 - `backend/core/settings.py`
 - `backend/core/urls.py`
-- new reports migration
-- possible media settings only if image upload requires local development serving
-- read-only integration with `patients.models.FollowUpCase`
-- read-only integration with `accounts.models.UserRole`
+- focused audit calls in:
+  - `workflows.views`
+  - `patients.serializers` or `patients.lifecycle`
+  - `reports.serializers`
+  - `decision_engine.services`
+  - `ai_support.services`
+  - `escalations.services` / `escalations.serializers`
+  - `appointments.services` / `appointments.serializers`
 
-Frontend expected changes:
-
-- new `frontend/src/api/reports.js`
+Frontend, if included:
+- `frontend/src/api/audit.js`
+- `frontend/src/pages/AuditLogPage.jsx`
+- `frontend/src/App.jsx`
 - `frontend/src/pages/Dashboards.jsx`
-- `frontend/src/pages/FollowUpManagementPage.jsx`
-- `frontend/src/App.css` only for necessary form/list styling
+- `frontend/src/App.css` only for minimal styling
 
-Do not modify workflow validation/lifecycle logic for this milestone.
+## Dependencies or Package Changes
+No new package dependencies are expected.
 
-## Dependencies Or Package Changes
-
-No new backend package should be added unless image handling requires a clearly justified package.
-
-Prefer Django’s built-in upload handling for the optional image field.
-
-No new frontend package is expected.
-
-If multipart upload is implemented, update frontend request handling carefully because the current shared `request()` helper defaults to JSON `Content-Type`.
-
-## Migrations Expected
-
-Yes.
-
-Expected migration:
-
-- create `reports_symptomreport`
+## Migrations
+A migration is expected because this milestone adds the `AuditLog` model.
 
 Run:
-
-- `python manage.py makemigrations reports`
+- `python manage.py makemigrations audit`
 - `python manage.py migrate`
-- `python manage.py check`
-
-Also run migration dry check after implementation:
-
-- `python manage.py makemigrations --check --dry-run`
 
 ## Completion Condition
-
-Milestone 5 is complete when:
-
-- `reports` app exists and is registered
-- `SymptomReport` model is implemented and migrated
-- `SymptomReport` is registered in Django admin
-- patient can submit a report for their own active follow-up case
-- patient cannot submit for another patient’s case
-- patient cannot submit for closed/resolved cases
-- patient can view only their own report history
-- dentist/admin can view reports
-- patient dashboard exposes a working symptom report form
-- patient dashboard shows report history
-- staff/admin follow-up UI shows submitted reports
-- no risk/advice/escalation/appointment behavior is present
-- backend tests for report permissions and validation pass
-- `python manage.py check` passes
-- migrations are applied
-- frontend lint/build pass if frontend files are changed
+Milestone 11 is complete when:
+- `audit` app exists and is registered.
+- `AuditLog` model exists and is migrated.
+- Stable audit action constants exist.
+- `record_audit` helper exists.
+- Key runtime actions create audit entries going forward.
+- Audit details avoid unnecessary sensitive free text.
+- Admin can view audit logs through API and Django admin.
+- Patients cannot access audit logs.
+- Existing Milestone 1-10 behavior remains unchanged.
+- Focused audit tests pass.
+- Full Django app tests pass.
+- `python manage.py check` passes.
+- Frontend build passes if frontend files are changed.
 
 ## Cautions
-
-- Do not implement the decision engine.
-- Do not create `RiskAssessment`.
-- Do not evaluate workflow rules.
-- Do not calculate risk level.
-- Do not create AI/advice messages.
-- Do not create escalation or appointment records.
-- Do not add audit logging.
-- Do not diagnose uploaded images.
-- Do not build dynamic workflow-driven symptom forms yet.
-- Keep fixed fields aligned with Post-Extraction version 1.
-- Keep backend permissions authoritative.
-- Do not expose reports across patients.
-- Do not trust frontend-provided ownership or day-after-treatment.
-- Preserve existing Milestone 4 patient/case behavior.
-- Build on the current working tree and do not revert uncommitted Milestone 4 files.
+- Do not change deterministic risk logic.
+- Do not change workflow validation behavior.
+- Do not change advice generation behavior.
+- Do not change escalation or appointment business rules.
+- Do not expose audit logs to patients.
+- Do not backfill old records.
+- Do not store full clinical notes, staff responses, advice text, or image content in audit details.
+- Avoid circular imports when adding audit calls.
+- Prefer explicit service calls over broad Django signals for this milestone.
+- Keep audit logging simple and testable.

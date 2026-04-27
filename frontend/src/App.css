@@ -201,8 +201,14 @@
 
 .split-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 380px) 1fr;
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
   gap: 20px;
+}
+
+.split-layout .list-panel {
+  max-width: none;
+  min-width: 0;
+  margin: 0;
 }
 
 .workflow-grid {
@@ -295,6 +301,11 @@
   padding: 12px;
 }
 
+.resource-list li > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .resource-list small {
   color: #607872;
   display: block;
@@ -326,6 +337,45 @@
   gap: 18px;
 }
 
+.case-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.case-heading-row h2 {
+  margin-bottom: 4px;
+}
+
+.case-position {
+  margin: 0;
+}
+
+.case-switcher {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.case-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.case-dot {
+  width: 8px;
+  height: 8px;
+  border: 1px solid #8aa39c;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+.case-dot.is-selected {
+  border-color: #1d6f60;
+  background: #1d6f60;
+}
+
 .case-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -334,6 +384,30 @@
   display: grid;
   gap: 22px;
   margin-top: 24px;
+}
+
+.terminal-case-notice {
+  border-left: 4px solid #7b8f89;
+  background: #f4f8f7;
+  padding: 16px 18px;
+}
+
+.terminal-case-notice h3 {
+  margin: 0 0 6px;
+}
+
+.terminal-case-notice p {
+  color: #40524e;
+  margin: 0;
+}
+
+.audit-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.audit-list {
+  margin-top: 0;
 }
 
 .report-form,
@@ -354,6 +428,167 @@
   display: grid;
   gap: 3px;
   margin-top: 8px;
+}
+
+.report-summary-item,
+.assessment-summary {
+  display: grid;
+  gap: 4px;
+}
+
+.assessment-summary {
+  border-left: 3px solid #dbe6e2;
+  margin-top: 8px;
+  padding-left: 10px;
+}
+
+.advice-summary {
+  display: grid;
+  gap: 4px;
+  border-left: 3px solid #1d6f60;
+  margin-top: 8px;
+  padding: 8px 0 8px 10px;
+}
+
+.advice-label {
+  color: #1d4f46;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.escalation-summary {
+  display: grid;
+  gap: 4px;
+  border-left: 3px solid #b54708;
+  margin-top: 8px;
+  padding: 8px 0 8px 10px;
+}
+
+.escalation-label {
+  color: #8a4b12;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.appointment-summary {
+  display: grid;
+  gap: 4px;
+  border-left: 3px solid #174ea6;
+  margin-top: 8px;
+  padding: 8px 0 8px 10px;
+}
+
+.appointment-label {
+  color: #174ea6;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.escalation-queue {
+  border-top: 1px solid #e3ebe8;
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 18px;
+}
+
+.escalation-card {
+  align-items: flex-start;
+}
+
+.escalation-card.is-compact {
+  background: #fbfdfc;
+}
+
+.handled-escalations {
+  border-top: 1px solid #eef3f1;
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 16px;
+}
+
+.handled-escalations h3 {
+  margin: 0;
+}
+
+.handled-list {
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.escalation-controls {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.appointment-controls {
+  display: grid;
+  gap: 10px;
+  border-left: 3px solid #d9e6ff;
+  margin-top: 10px;
+  padding: 8px 0 8px 10px;
+}
+
+.appointment-controls label {
+  display: grid;
+  gap: 6px;
+  color: #293b37;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.appointment-controls input,
+.appointment-controls select,
+.appointment-controls textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #bfcec9;
+  border-radius: 6px;
+  color: #182622;
+  font: inherit;
+  padding: 9px 10px;
+}
+
+.appointment-controls textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.escalation-controls label {
+  display: grid;
+  gap: 6px;
+  color: #293b37;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.escalation-controls select,
+.escalation-controls textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #bfcec9;
+  border-radius: 6px;
+  color: #182622;
+  font: inherit;
+  padding: 9px 10px;
+}
+
+.escalation-controls textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.compact-button {
+  justify-self: start;
+  margin-top: 4px;
+  padding: 7px 10px;
+}
+
+.review-actions {
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .status-badge {
@@ -417,6 +652,7 @@
   }
 
   .top-bar,
+  .case-heading-row,
   .dashboard-panel,
   .split-layout,
   .workflow-grid,
@@ -427,5 +663,9 @@
   .top-bar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .case-switcher {
+    justify-items: start;
   }
 }
