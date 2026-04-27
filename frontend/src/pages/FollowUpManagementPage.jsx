@@ -56,20 +56,37 @@ export default function FollowUpManagementPage() {
   )
 
   async function fetchData() {
-    const [usersData, profilesData, casesData, workflowsData, reportsData] = await Promise.all([
-      listPatientUsers(),
-      listPatientProfiles(),
-      listFollowUpCases(),
-      listWorkflows(),
-      listSymptomReports(),
-    ])
+    const requests = {
+      casesData: listFollowUpCases(),
+      profilesData: listPatientProfiles(),
+      reportsData: listSymptomReports(),
+      usersData: listPatientUsers(),
+      workflowsData: listWorkflows(),
+    }
+    const results = await Promise.allSettled(Object.entries(requests).map(([, request]) => request))
+    const entries = Object.keys(requests)
+    const errors = []
+    const data = {
+      casesData: [],
+      profilesData: [],
+      reportsData: [],
+      usersData: [],
+      workflowsData: [],
+    }
+
+    results.forEach((result, index) => {
+      const key = entries[index]
+      if (result.status === 'fulfilled') {
+        data[key] = result.value
+        return
+      }
+
+      errors.push(result.reason.message)
+    })
 
     return {
-      casesData,
-      profilesData,
-      reportsData,
-      usersData,
-      workflowsData,
+      ...data,
+      error: errors[0] || '',
     }
   }
 
@@ -80,6 +97,7 @@ export default function FollowUpManagementPage() {
     setCases(data.casesData)
     setReports(data.reportsData)
     setWorkflows(data.workflowsData)
+    setError(data.error)
   }
 
   useEffect(() => {
@@ -95,6 +113,7 @@ export default function FollowUpManagementPage() {
         setCases(data.casesData)
         setReports(data.reportsData)
         setWorkflows(data.workflowsData)
+        setError(data.error)
       })
       .catch((err) => {
         if (isMounted) {

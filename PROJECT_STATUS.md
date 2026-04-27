@@ -58,17 +58,37 @@ The system is workflow-driven dental follow-up.
 - admin-protected workflow APIs added
 - workflow model migrations created and applied
 - frontend admin workflow management pages added
+- workflow validation service added
+- workflow lifecycle API actions added:
+  - validate
+  - activate
+  - archive
+- invalid workflows are blocked from becoming validated or active
+- active workflow structures are protected from direct API edits
+- frontend admin validation/lifecycle controls added
+- patients Django app created
+- minimal patient profiles added
+- follow-up cases added
+- active workflow assignment enforcement added
+- patient/staff follow-up access control added
+- patient dashboard active-case display added
+- staff/admin follow-up case management UI added
+- reports Django app created
+- symptom report model/API added
+- patient symptom report submission added
+- patient report history display added
+- staff/admin symptom report visibility added
 
 ## Current project stage
-Workflow Modeling Core implemented and passing checks.
-Runtime business logic has not started yet.
+Symptom Reporting implemented and passing checks.
+Decision runtime has not started yet.
 
 ## Current active milestone
-Milestone 2 - Workflow Modeling Core
+Milestone 5 - Symptom Reporting
 
 ## Immediate next objective
-Manually verify admin workflow creation in the browser.
-After that, refine the plan for Milestone 3 - Workflow Validation and Lifecycle.
+Manually verify symptom report submission, patient report history, and staff/admin report visibility in the browser.
+After that, refine the plan for Milestone 6 - Decision Engine and Risk Assessment.
 
 ## Fixed design decisions
 - First complete workflow: Post-Extraction Follow-Up
@@ -79,10 +99,8 @@ After that, refine the plan for Milestone 3 - Workflow Validation and Lifecycle.
 - Image upload is supporting evidence only
 
 ## What is intentionally not implemented yet
-- workflow validation
-- patient follow-up cases
-- symptom reports
 - decision engine
+- risk assessment
 - bounded advice module
 - escalation logic
 - appointment priority

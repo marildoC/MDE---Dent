@@ -1,146 +1,308 @@
-Milestone 2 - Workflow Modeling Core
-Summary
-Goal: build the central structured workflow model for DentCare-MDE, starting with Post-Extraction Follow-Up.
+# CURRENT_MILESTONE.md
 
-This milestone creates the data model, admin/API surface, and minimal admin frontend needed to define workflow structures. It does not validate, activate, assign, execute, or evaluate workflows yet.
+## Milestone Name
 
-Current repo state:
+Milestone 5 - Symptom Reporting
 
-Milestone 1 auth foundation is implemented.
-accounts has UserRole and IsAdminRole.
-Backend has no workflows app yet.
-Frontend has protected role routes and an admin dashboard placeholder.
-Django migrations are current and manage.py check passes.
-In Scope
-Create a new workflows Django app.
-Add structured workflow models:
-TreatmentWorkflow
-CareStage
-SymptomDefinition
-SymptomRule
-AIAdviceBoundary
-EscalationRule
-Store rule conditions as JSON structured data, never executable strings.
-Add Django admin registration for workflow models.
-Add admin-protected DRF APIs for CRUD operations.
-Add frontend admin workflow management pages:
-workflow list
-workflow create/edit
-workflow detail with simple forms for stages, symptoms, rules, AI boundaries, and escalation rules
-Allow creating the Post-Extraction Follow-Up workflow structure as DRAFT.
-Out of scope:
+## Goal
 
-Workflow validation and activation enforcement.
-Patient profiles, follow-up cases, symptom reports, decision engine, advice generation, escalation cases, appointments, audit logging.
-Dynamic patient report forms.
-Graphical workflow editor.
-LLM/image diagnosis/cloud work.
-Backend Plan
-Implement workflows and add it to INSTALLED_APPS.
+Allow patients to submit fixed-field Post-Extraction symptom reports connected to their own active follow-up case.
 
-Models:
+By the end of this milestone:
 
-TreatmentWorkflow
+- a patient with an active follow-up case can submit a symptom report
+- the report is persisted in the backend
+- the patient can view their own report history
+- dentist/admin users can view submitted reports
+- no risk decision, advice, escalation, appointment, or audit behavior is created yet
 
-name, treatment_type, status, description, created_by, timestamps
-status choices: DRAFT, VALIDATED, ACTIVE, ARCHIVED
-first treatment choice: POST_EXTRACTION
-default status: DRAFT
-CareStage
+This milestone captures patient recovery data only.
 
-workflow, name, start_day, end_day, description, sort_order
-examples: Day 0-1, Day 2-3, Day 4-7
-SymptomDefinition
+## Why This Milestone Matters
 
-workflow, key, label, data_type, allowed_values, min_value, max_value, description, is_required
-data types: INTEGER, BOOLEAN, CHOICE, TEXT
-intended Post-Extraction keys: pain_level, swelling, bleeding, fever, bad_smell
-SymptomRule
+Milestone 4 connected patient users to active workflows through:
 
-stage, name, condition, risk_level, recommended_action, appointment_priority, explanation
-risk choices: LOW, WARNING, HIGH, URGENT
-action choices: SHOW_ADVICE, CONTINUE_MONITORING, RECOMMEND_CONTACT, ESCALATE_TO_DENTIST, PRIORITIZE_APPOINTMENT
-priority choices: NONE, LOW, NORMAL, HIGH, URGENT
-condition supports all / any groups and operators =, !=, >, >=, <, <=, in
-AIAdviceBoundary
+`User -> PatientProfile -> FollowUpCase`
 
-workflow, optional stage, allowed_topics, forbidden_topics, required_disclaimer
-must support boundaries against diagnosis and prescription, but does not generate advice yet
-EscalationRule
+Milestone 5 creates the next runtime input:
 
-linked symptom_rule, target_role, urgency, appointment_priority, message
-target role should use existing roles, with DENTIST as the staff target for v1
-APIs:
+`FollowUpCase -> SymptomReport`
 
-Use DRF serializers and viewsets.
-Register routes under /api/workflows/.
-Require IsAdminRole for create/update/delete.
-Keep read access admin-only in this milestone.
-Use simple flat endpoints for each model; nesting can be added later only if needed.
+The decision engine in a later milestone will evaluate these reports against the active workflow rules. This milestone must therefore store clean, permission-safe report data without starting deterministic risk evaluation early.
+
+## Current Repository State
+
+Already implemented:
+
+- `accounts` app with custom user roles: `PATIENT`, `DENTIST`, `ADMIN`
+- JWT login and current-user API
+- role-protected frontend routing
+- `workflows` app with workflow models, validation, lifecycle actions, and admin workflow UI
+- `patients` app with `PatientProfile` and `FollowUpCase`
+- active workflow assignment enforcement
+- patient dashboard active-case display
+- staff/admin follow-up case management UI
+
+Not implemented yet:
+
+- no `reports` app exists
+- no `SymptomReport` model exists
+- no report API exists
+- no patient symptom report form exists
+- no report history UI exists
+- no staff/admin report visibility exists
+
+Current git caution:
+
+- Milestone 4 files are still present as uncommitted/untracked changes.
+- Build on the current working tree; do not revert Milestone 4 work.
+
+## In Scope
+
+- Create a new backend `reports` app.
+- Add a fixed-field `SymptomReport` model.
+- Link each report to `patients.FollowUpCase`.
+- Record the authenticated patient user as `submitted_by`.
+- Calculate `day_after_treatment` from the follow-up case treatment date on the backend.
+- Allow patients to submit reports only for their own active/non-closed follow-up case.
+- Allow patients to view only their own report history.
+- Allow dentist/admin users to view reports.
+- Add optional image upload as supporting evidence only.
+- Add Django admin registration for reports.
+- Add report API helpers in the frontend.
+- Add patient-facing symptom report form.
+- Add patient report history display.
+- Add staff/admin report visibility in the follow-up case management area.
+- Add focused backend tests for permissions, validation, and report creation.
+
+## Out Of Scope
+
+- Decision engine.
+- Risk assessment.
+- Workflow rule matching.
+- Risk level selection.
+- Bounded AI/advice responses.
+- Automatic escalation.
+- Appointment priority.
+- Audit logging.
+- Dynamic forms generated from `SymptomDefinition`.
+- Image diagnosis or AI image interpretation.
+- Notifications.
+- User registration or demo-data seeding.
+- Full clinic-management features.
+
+## Backend Work
+
+Create a new app:
+
+- `backend/reports/`
+
+Register it in:
+
+- `backend/core/settings.py`
+- `backend/core/urls.py`
+
+Add model:
+
+- `SymptomReport`
+
+Fields:
+
+- `follow_up_case`: FK to `patients.FollowUpCase`
+- `submitted_by`: FK to `accounts.User`
+- `day_after_treatment`: non-negative integer
+- `pain_level`: integer, 0 to 10
+- `swelling`: controlled choices: `NONE`, `MILD`, `SEVERE`
+- `bleeding`: controlled choices: `NONE`, `MILD`, `SEVERE`
+- `fever`: boolean
+- `bad_smell`: boolean
+- `notes`: optional text
+- `image`: optional image/file upload
+- `created_at`
+- `updated_at`
+
+Backend rules:
+
+- only authenticated `PATIENT` users can create reports
+- report creation must use a follow-up case owned by the authenticated patient
+- reports cannot be submitted for another patient’s case
+- reports cannot be submitted for `CLOSED` or `RESOLVED` cases
+- staff/admin can view reports but cannot submit reports as patients
+- backend calculates `day_after_treatment`; frontend must not be trusted for it
+- image is stored only as supporting evidence and is not interpreted
+
+API shape:
+
+- `GET /api/reports/symptom-reports/`
+  - patient: list own reports
+  - dentist/admin: list reports
+- `POST /api/reports/symptom-reports/`
+  - patient only
+- `GET /api/reports/symptom-reports/{id}/`
+  - patient can retrieve own report
+  - dentist/admin can retrieve reports
+- optional query filtering:
+  - `?follow_up_case=<id>` for staff/admin and for the owning patient
+
+Keep the API simple. Do not add separate `my-reports` endpoint unless it meaningfully simplifies the frontend.
+
+Serializer behavior:
+
+- expose nested basic case details read-only if useful for UI
+- keep `submitted_by` and `day_after_treatment` read-only
+- validate pain level and choice fields
+- validate ownership and case status server-side
+
+Admin:
+
+- register `SymptomReport`
+- show patient, follow-up case, day, pain level, fever, bad smell, created date
+
 Backend tests:
 
-admin can create a workflow
-non-admin cannot create workflow data
-workflow related objects can be created
-structured rule condition JSON is accepted
-invalid obvious condition shape is rejected only at a basic structural level, without implementing full workflow validation
-Frontend Plan
-Extend the existing admin area only.
+- patient can create a report for own active follow-up case
+- patient cannot create a report for another patient’s case
+- patient cannot submit for `CLOSED` case
+- patient cannot submit for `RESOLVED` case
+- patient can list/retrieve own reports
+- patient cannot list/retrieve another patient’s reports
+- dentist/admin can list/retrieve reports
+- dentist/admin cannot create patient symptom reports
+- invalid pain level is rejected
+- invalid swelling/bleeding choices are rejected
+- image is optional
 
-Add workflow API helper methods.
-Add admin route for workflow management.
-Update Admin Dashboard to link to workflow management.
-Add workflow list page.
-Add create/edit workflow form.
-Add workflow detail page with simple sections/forms for:
-care stages
-symptom definitions
-symptom rules
-AI advice boundaries
-escalation rules
-Keep UI form-based, compact, and functional.
-Do not expose workflow management to patient or dentist dashboards.
-File/Module Impact
-Expected backend changes:
+## Frontend Work
 
-new backend/workflows/ app
-backend/core/settings.py
-backend/core/urls.py
-workflow migration files
-possible reuse of backend/accounts/permissions.py
-Expected frontend changes:
+Add report API helper module:
 
-frontend/src/App.jsx
-frontend/src/pages/
-frontend/src/api/
-possibly shared form/style additions in existing CSS
-Dependencies:
+- `frontend/src/api/reports.js`
 
-No new backend package expected.
-No new frontend package expected.
-Use existing Django, DRF, SimpleJWT, React, and React Router.
-Migrations:
+Add helpers for:
 
-Yes. New workflow models require migrations.
-Run makemigrations, migrate, then python manage.py check.
-Completion Condition
-Milestone 2 is complete when:
+- list symptom reports
+- create symptom report
+- optional list by follow-up case
 
-workflows app exists and is registered.
-Workflow models are migrated and visible in Django admin.
-Admin-protected workflow APIs exist.
-Admin can create a TreatmentWorkflow.
-Admin can add care stages, symptom definitions, symptom rules, AI advice boundaries, and escalation rules.
-Non-admin users cannot create or modify workflow data through the API.
-Admin frontend can create/view the core Post-Extraction Follow-Up workflow structure.
-python manage.py check passes.
-Focused workflow API/model permission tests pass.
-Cautions
-Do not implement workflow validation lifecycle behavior in this milestone.
-Do not activate or assign workflows yet.
-Do not implement report submission or decision evaluation.
-Do not hardcode Post-Extraction behavior only in backend logic; store it as workflow data.
-Do not store rule conditions as raw strings.
-Do not add LLM or patient-facing advice behavior.
-Keep active workflow immutability concerns for later lifecycle work.
-Keep this milestone narrow: model structure, admin CRUD, minimal admin UI.
+Patient UI:
+
+- extend `PatientDashboard` or add a small patient report section under the active case summary
+- show a `Submit symptom report` form only when an active case exists
+- form fields:
+  - pain level 0-10
+  - swelling dropdown
+  - bleeding dropdown
+  - fever yes/no
+  - bad smell/taste yes/no
+  - notes
+  - optional image upload, if backend upload handling is implemented in this milestone
+- after submission:
+  - refresh report history
+  - show success message
+  - do not show risk, advice, escalation, or diagnosis
+
+Patient report history:
+
+- show submitted date
+- day after treatment
+- pain level
+- swelling
+- bleeding
+- fever
+- bad smell
+- notes summary if present
+
+Staff/admin UI:
+
+- extend `FollowUpManagementPage`
+- show reports associated with follow-up cases
+- keep the display simple and read-only
+- do not add staff decision actions yet
+
+## Expected File/Module Impact
+
+Backend expected changes:
+
+- new `backend/reports/` app
+- `backend/core/settings.py`
+- `backend/core/urls.py`
+- new reports migration
+- possible media settings only if image upload requires local development serving
+- read-only integration with `patients.models.FollowUpCase`
+- read-only integration with `accounts.models.UserRole`
+
+Frontend expected changes:
+
+- new `frontend/src/api/reports.js`
+- `frontend/src/pages/Dashboards.jsx`
+- `frontend/src/pages/FollowUpManagementPage.jsx`
+- `frontend/src/App.css` only for necessary form/list styling
+
+Do not modify workflow validation/lifecycle logic for this milestone.
+
+## Dependencies Or Package Changes
+
+No new backend package should be added unless image handling requires a clearly justified package.
+
+Prefer Django’s built-in upload handling for the optional image field.
+
+No new frontend package is expected.
+
+If multipart upload is implemented, update frontend request handling carefully because the current shared `request()` helper defaults to JSON `Content-Type`.
+
+## Migrations Expected
+
+Yes.
+
+Expected migration:
+
+- create `reports_symptomreport`
+
+Run:
+
+- `python manage.py makemigrations reports`
+- `python manage.py migrate`
+- `python manage.py check`
+
+Also run migration dry check after implementation:
+
+- `python manage.py makemigrations --check --dry-run`
+
+## Completion Condition
+
+Milestone 5 is complete when:
+
+- `reports` app exists and is registered
+- `SymptomReport` model is implemented and migrated
+- `SymptomReport` is registered in Django admin
+- patient can submit a report for their own active follow-up case
+- patient cannot submit for another patient’s case
+- patient cannot submit for closed/resolved cases
+- patient can view only their own report history
+- dentist/admin can view reports
+- patient dashboard exposes a working symptom report form
+- patient dashboard shows report history
+- staff/admin follow-up UI shows submitted reports
+- no risk/advice/escalation/appointment behavior is present
+- backend tests for report permissions and validation pass
+- `python manage.py check` passes
+- migrations are applied
+- frontend lint/build pass if frontend files are changed
+
+## Cautions
+
+- Do not implement the decision engine.
+- Do not create `RiskAssessment`.
+- Do not evaluate workflow rules.
+- Do not calculate risk level.
+- Do not create AI/advice messages.
+- Do not create escalation or appointment records.
+- Do not add audit logging.
+- Do not diagnose uploaded images.
+- Do not build dynamic workflow-driven symptom forms yet.
+- Keep fixed fields aligned with Post-Extraction version 1.
+- Keep backend permissions authoritative.
+- Do not expose reports across patients.
+- Do not trust frontend-provided ownership or day-after-treatment.
+- Preserve existing Milestone 4 patient/case behavior.
+- Build on the current working tree and do not revert uncommitted Milestone 4 files.
