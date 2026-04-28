@@ -113,21 +113,25 @@ The system is workflow-driven dental follow-up.
 - admin-only audit log API added
 - audit logs registered in Django admin
 - minimal admin audit log frontend page added
+- testing and reliability milestone completed
+- backend regression coverage strengthened with cross-module Post-Extraction flows:
+  - high-risk report -> risk assessment -> advice -> escalation -> appointment -> case resolution -> audit trace
+  - low-risk report -> risk assessment -> advice without escalation or appointment
+- backend app test suite passes
+- Django system checks and migration dry-run pass
+- frontend lint and build pass
 
 ## Current project stage
-Audit and Decision Logging implemented and passing checks.
-Testing and Reliability completion has not started yet.
+Testing and Reliability implemented and passing checks.
 
 ## Current active milestone
-Milestone 11 - Audit and Decision Logging
+Milestone 12 - Testing and Reliability
 
 ## Immediate next objective
-Manually verify audit log visibility in the browser as admin:
-- workflow lifecycle actions create visible audit rows
-- patient report submission creates report/risk/advice/escalation audit rows
-- escalation and appointment updates create audit rows
-- patient users cannot access audit logs
-After that, refine the plan for Milestone 12 - Testing and Reliability.
+Prepare for Milestone 13 - UI Completion and Demo Flow:
+- verify the browser demo flow for patient, staff, and admin users
+- keep UI work focused on implemented workflows
+- avoid new product features while polishing the existing demo path
 
 ## Fixed design decisions
 - First complete workflow: Post-Extraction Follow-Up
@@ -138,7 +142,6 @@ After that, refine the plan for Milestone 12 - Testing and Reliability.
 - Image upload is supporting evidence only
 
 ## What is intentionally not implemented yet
-- testing and reliability completion
 - UI completion and demo polish
 - report and diagram alignment
 - cloud deployment

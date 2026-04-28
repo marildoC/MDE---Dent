@@ -1,281 +1,80 @@
-# CURRENT_MILESTONE.md
+ CURRENT_MILESTONE.md as the concrete working plan for Milestone 12 - Testing and Reliability.
 
-## Milestone Name
-Milestone 11 - Audit and Decision Logging
+Main adjustments:
 
-## Goal
-Add persistent audit logging for important DentCare-MDE actions across the existing workflow/runtime chain.
+Keep the milestone focused on reliability, not new product scope.
+Reflect that backend modules and many focused tests already exist.
+Prioritize missing cross-module regression coverage over rewriting good app-level tests.
+Add environment reliability as a first concern because full backend test execution hit an inconsistent local Python/venv launcher issue.
+Keep frontend work limited to lint/build and broken-flow fixes only.
+Replacement Structure
+CURRENT_MILESTONE.md should contain these sections:
 
-The audit trail should record:
-- who acted
-- what action occurred
-- what object was affected
-- when it happened
-- safe structured metadata about the event
-
-This milestone must not change workflow validation, risk decisions, advice generation, escalation behavior, appointment behavior, or case lifecycle rules.
-
-## Why This Milestone Matters
-DentCare-MDE is a model-driven dental follow-up system. Workflow models drive patient reports, deterministic decisions, advice, escalations, staff actions, appointment priority, and case lifecycle changes.
-
-Audit logging makes that chain traceable:
-
-workflow model -> validation -> follow-up case -> symptom report -> deterministic decision -> bounded advice/escalation -> staff action -> appointment priority -> audit trace
-
-This supports debugging, staff trust, testing, and the SWE/MDD report.
-
-## In Scope
-- Create a new backend `audit` app.
-- Add persistent `AuditLog` model.
-- Add stable audit action constants.
-- Add a reusable audit recording helper/service.
-- Register audit logs in Django admin.
-- Add a read-only audit API for admin users.
-- Record audit events going forward from existing stable backend points.
-- Add focused backend tests for audit creation, permissions, and sensitive-detail avoidance.
-- Add a simple admin-only frontend audit log page if backend work is complete and the UI change remains small.
-- Update `PROJECT_STATUS.md` after implementation.
-
-## Out of Scope
-- Changing business logic from Milestones 1-10.
-- Changing workflow validation rules.
-- Changing decision-engine risk evaluation.
-- Changing bounded advice templates.
-- Changing escalation creation rules.
-- Changing appointment lifecycle behavior.
-- Notifications.
-- Real-time event streaming.
-- Analytics dashboards.
-- Export/reporting tools.
-- External immutable log storage.
-- Backfilling audit logs for existing database records.
-- Patient-facing audit timeline.
-- Complex dentist-specific audit filtering.
-
-## Backend Work
-
-### 1. Create Audit App
-Create a new Django app:
-
-- `backend/audit/`
-
-Register it in:
-
-- `backend/core/settings.py`
-- `backend/core/urls.py`
-
-API path:
-
-- `/api/audit/logs/`
-
-### 2. Add AuditLog Model
-Add `AuditLog` with:
-
-- `actor`: nullable FK to user
-- `action`: stable string action
-- `target_type`: string
-- `target_id`: string
-- `target_repr`: short readable label
-- `details`: JSON field, default dict
-- `created_at`: timestamp
-
-Ordering:
-
-- newest first
-
-Create and apply migration.
-
-### 3. Add Action Constants
-Create stable constants, likely in `backend/audit/actions.py`.
-
-Required actions:
-
-- `WORKFLOW_VALIDATED`
-- `WORKFLOW_ACTIVATED`
-- `WORKFLOW_ARCHIVED`
-- `FOLLOW_UP_CASE_CREATED`
-- `FOLLOW_UP_CASE_STATUS_CHANGED`
-- `SYMPTOM_REPORT_SUBMITTED`
-- `RISK_ASSESSMENT_CREATED`
-- `ADVICE_CREATED`
-- `ESCALATION_CREATED`
-- `ESCALATION_UPDATED`
-- `APPOINTMENT_CREATED`
-- `APPOINTMENT_UPDATED`
-
-Use constants, not scattered raw strings.
-
-### 4. Add Audit Service
-Create `record_audit(actor, action, target, details=None)`.
-
-Behavior:
-- Accept `actor=None` for system-generated events.
-- Derive `target_type`, `target_id`, and `target_repr` from the target object.
-- Store `details` as safe structured metadata.
-- Do not swallow programming errors with broad silent exception handling.
-- Do not add an event bus or signal-heavy architecture.
-
-### 5. Integrate Audit Calls
-Add audit calls at stable points:
-
-- Workflow lifecycle actions in `workflows.views`
-  - validate
-  - activate
-  - archive
-
-- Follow-up case creation/status change in `patients`
-  - serializer/view update path
-  - lifecycle helper/service where status transitions are applied
-
-- Symptom report submission in `reports.serializers`
-  - after report is created
-
-- Risk assessment creation in `decision_engine.services`
-  - after `RiskAssessment.objects.create`
-
-- Advice creation in `ai_support.services`
-  - after `AdviceMessage.objects.create`
-
-- Escalation creation/update in `escalations.services` and/or serializer update path
-
-- Appointment creation/update in `appointments.services` and serializer update path
-
-Avoid duplicate audit rows when a service is idempotent and returns an existing object.
-
-### 6. Sensitive Data Rules
-Do not store full free-text clinical content in audit details.
-
-Avoid:
-- full symptom report notes
-- full dental notes
-- full staff response
-- full advice message
-- image file contents or paths
-
-Prefer:
-- object IDs
-- old/new status
-- risk level
-- recommended action
-- appointment priority
-- matched rule IDs
-- workflow ID
-- follow-up case ID
-- patient profile ID
-- assigned staff ID
-
-### 7. Audit API
-Add read-only DRF serializer/viewset.
-
-Access:
-- Admin users can list/retrieve audit logs.
-- Dentist/staff access is out of scope for this milestone unless a simple safe filter is already obvious.
-- Patients cannot access audit logs.
-- Unauthenticated users cannot access audit logs.
-
-Optional simple filters:
-- `action`
-- `target_type`
-- `target_id`
-- `actor`
-
-Do not add search, export, analytics, or complex reporting.
-
-### 8. Django Admin
-Register `AuditLog`.
-
-Useful list fields:
-- `created_at`
-- `action`
-- `actor`
-- `target_type`
-- `target_id`
-- `target_repr`
-
-## Frontend Work
-Add a minimal admin-only audit page only after backend audit API is working.
-
-Expected frontend impact:
-- `frontend/src/api/audit.js`
-- a simple `AuditLogPage.jsx`
-- admin dashboard link
-- protected route for `ADMIN`
-
-Display:
-- timestamp
-- action
-- actor
-- target type
-- target label/id
-- compact details
-
-Do not expose audit logs to patients.
-Do not build charts, exports, advanced filters, or patient timelines.
-
-If backend audit work takes longer than expected, frontend audit UI may be deferred, but the backend API and Django admin visibility must be completed.
-
-## Expected File/Module Impact
-Backend:
-- `backend/audit/models.py`
-- `backend/audit/actions.py`
-- `backend/audit/services.py`
-- `backend/audit/serializers.py`
-- `backend/audit/views.py`
-- `backend/audit/urls.py`
-- `backend/audit/admin.py`
-- `backend/audit/tests.py`
-- `backend/core/settings.py`
-- `backend/core/urls.py`
-- focused audit calls in:
-  - `workflows.views`
-  - `patients.serializers` or `patients.lifecycle`
-  - `reports.serializers`
-  - `decision_engine.services`
-  - `ai_support.services`
-  - `escalations.services` / `escalations.serializers`
-  - `appointments.services` / `appointments.serializers`
-
-Frontend, if included:
-- `frontend/src/api/audit.js`
-- `frontend/src/pages/AuditLogPage.jsx`
-- `frontend/src/App.jsx`
-- `frontend/src/pages/Dashboards.jsx`
-- `frontend/src/App.css` only for minimal styling
-
-## Dependencies or Package Changes
-No new package dependencies are expected.
-
-## Migrations
-A migration is expected because this milestone adds the `AuditLog` model.
-
-Run:
-- `python manage.py makemigrations audit`
-- `python manage.py migrate`
-
-## Completion Condition
-Milestone 11 is complete when:
-- `audit` app exists and is registered.
-- `AuditLog` model exists and is migrated.
-- Stable audit action constants exist.
-- `record_audit` helper exists.
-- Key runtime actions create audit entries going forward.
-- Audit details avoid unnecessary sensitive free text.
-- Admin can view audit logs through API and Django admin.
-- Patients cannot access audit logs.
-- Existing Milestone 1-10 behavior remains unchanged.
-- Focused audit tests pass.
-- Full Django app tests pass.
-- `python manage.py check` passes.
-- Frontend build passes if frontend files are changed.
-
-## Cautions
-- Do not change deterministic risk logic.
-- Do not change workflow validation behavior.
-- Do not change advice generation behavior.
-- Do not change escalation or appointment business rules.
-- Do not expose audit logs to patients.
-- Do not backfill old records.
-- Do not store full clinical notes, staff responses, advice text, or image content in audit details.
-- Avoid circular imports when adding audit calls.
-- Prefer explicit service calls over broad Django signals for this milestone.
-- Keep audit logging simple and testable.
+Milestone name: Milestone 12 - Testing and Reliability
+Goal: prove the implemented workflow-driven runtime is stable.
+Why this matters: Milestones 1-11 built the runtime chain; Milestone 12 protects it before UI polish and report alignment.
+In scope:
+backend test review
+cross-module high-risk Post-Extraction regression
+low-risk no-escalation regression
+permission coverage
+lifecycle/state transition coverage
+audit log coverage
+downstream idempotency coverage
+small reliability fixes only when tests expose real bugs
+environment/test command reliability
+Out of scope:
+new features
+model redesign
+UI polish
+report/diagram work
+cloud/Docker work
+LLM integration
+new dependencies unless clearly required
+Backend work:
+Normalize/verify Python test environment.
+Run existing app tests and record failures.
+Preserve existing focused tests in accounts, workflows, patients, reports, decision_engine, ai_support, escalations, appointments, and audit.
+Add one cross-module high-risk end-to-end backend test covering workflow activation through report, risk assessment, advice, escalation, appointment, case resolution, and audit logs.
+Add one low-risk backend regression proving no escalation or appointment is created.
+Fill only concrete gaps in permission, lifecycle, idempotency, workflow validation, rule evaluation, and audit coverage.
+Apply small bug fixes only if tests expose real reliability problems.
+Frontend work:
+Run npm run lint.
+Run npm run build.
+Fix only broken imports, routes, API wiring, or implemented-flow reliability issues.
+Expected file/module impact:
+Mostly backend/*/tests.py.
+Possible small fixes in serializers/services/views/lifecycle helpers if tests expose bugs.
+Possible minimal frontend fixes under frontend/src.
+No roadmap edits.
+Dependencies/package changes:
+None expected.
+Migrations:
+No migrations expected.
+Run python manage.py makemigrations --check --dry-run.
+Completion condition:
+backend suite passes
+Django check passes
+migration dry-run passes
+frontend lint/build pass
+high-risk and low-risk regression tests exist and pass
+no new product features added
+Cautions:
+Do not weaken permissions to pass tests.
+Do not bypass workflow validation.
+Do not remove audit logging.
+Do not treat image upload as AI diagnosis.
+Do not broaden beyond Post-Extraction v1 behavior.
+Protect existing user changes in CURRENT_MILESTONE.md.
+Implementation Plan In Short
+Replace CURRENT_MILESTONE.md with a shorter repository-aware plan based on the structure above.
+Start Milestone 12 implementation later by fixing the Python/venv test command issue first.
+Then run the backend suite, add missing cross-module regression tests, and only fix bugs exposed by those tests.
+Finish with Django checks, migration dry-run, frontend lint, and frontend build.
+Assumptions And Risks
+Existing CURRENT_MILESTONE.md is already directionally correct, so the rewrite should refine and tighten it rather than change the milestone.
+No model changes or migrations should be needed.
+The main uncovered area appears to be full cross-module regression coverage, not app-level unit coverage.
+I observed CURRENT_MILESTONE.md already modified in the working tree; treat that as user-owned content.
+Full backend test execution could not be verified because the venv/Python launcher became inconsistent and reported a missing Python 3.12 path. Frontend lint/build passed, and Django check plus migration dry-run initially passed.
