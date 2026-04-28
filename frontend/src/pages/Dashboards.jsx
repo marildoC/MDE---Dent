@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { generateAdvice } from '../api/aiSupport.js'
 import { listAppointments } from '../api/appointments.js'
 import { evaluateReport } from '../api/decisionEngine.js'
@@ -114,12 +114,13 @@ function DemoPathSummary() {
 }
 
 export function PatientDashboard() {
-  const { logout, user } = useAuth()
+  const { logout } = useAuth()
   const [followUpCases, setFollowUpCases] = useState([])
   const [selectedCaseIndex, setSelectedCaseIndex] = useState(0)
   const [appointments, setAppointments] = useState([])
   const [escalations, setEscalations] = useState([])
   const [reports, setReports] = useState([])
+  const [expandedReportIds, setExpandedReportIds] = useState(new Set())
   const [reportForm, setReportForm] = useState(reportInitial)
   const [reportFormKey, setReportFormKey] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -129,6 +130,7 @@ export function PatientDashboard() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const activeCase = followUpCases[selectedCaseIndex] || null
+  const sortedReports = useMemo(() => sortReportsNewestFirst(reports), [reports])
 
   useEffect(() => {
     let isMounted = true
@@ -159,28 +161,33 @@ export function PatientDashboard() {
   useEffect(() => {
     let isMounted = true
 
-    if (activeCase) {
-      Promise.all([
-        listAppointments({ followUpCaseId: activeCase.id }),
-        listSymptomReports({ followUpCaseId: activeCase.id }),
-        listEscalationCases({ followUpCaseId: activeCase.id }),
-      ])
-        .then(([appointmentsData, reportsData, escalationsData]) => {
-          if (isMounted) {
-            setAppointments(appointmentsData)
-            setReports(reportsData)
-            setEscalations(escalationsData)
-          }
-        })
-        .catch((err) => {
-          if (isMounted) {
-            setError(err.message)
-            setAppointments([])
-            setReports([])
-            setEscalations([])
-          }
-        })
+    if (!activeCase) {
+      return () => {
+        isMounted = false
+      }
     }
+
+    Promise.all([
+      listAppointments({ followUpCaseId: activeCase.id }),
+      listSymptomReports({ followUpCaseId: activeCase.id }),
+      listEscalationCases({ followUpCaseId: activeCase.id }),
+    ])
+      .then(([appointmentsData, reportsData, escalationsData]) => {
+        if (isMounted) {
+          setAppointments(appointmentsData)
+          setReports(reportsData)
+          setEscalations(escalationsData)
+          setExpandedReportIds(defaultExpandedReportIds(reportsData))
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setError(err.message)
+          setAppointments([])
+          setReports([])
+          setEscalations([])
+        }
+      })
 
     return () => {
       isMounted = false
@@ -196,6 +203,7 @@ export function PatientDashboard() {
     setAppointments(appointmentsData)
     setReports(reportsData)
     setEscalations(escalationsData)
+    setExpandedReportIds(defaultExpandedReportIds(reportsData))
   }
 
   const handleReportChange = (event) => {
@@ -217,8 +225,21 @@ export function PatientDashboard() {
     setReports([])
     setEscalations([])
     setReportForm(reportInitial)
+    setExpandedReportIds(new Set())
     setReportFormKey((current) => current + 1)
     setSelectedCaseIndex((current) => (current + 1) % followUpCases.length)
+  }
+
+  const toggleReport = (reportId) => {
+    setExpandedReportIds((current) => {
+      const next = new Set(current)
+      if (next.has(reportId)) {
+        next.delete(reportId)
+      } else {
+        next.add(reportId)
+      }
+      return next
+    })
   }
 
   const submitReport = async (event) => {
@@ -286,9 +307,9 @@ export function PatientDashboard() {
 
   return (
     <main className="app-shell">
-      <header className="top-bar">
+      <header className="top-bar patient-top-bar">
         <div>
-          <p className="eyebrow">DentCare-MDE</p>
+          <p className="eyebrow">Patient</p>
           <h1>Patient Dashboard</h1>
         </div>
         <button className="secondary-button" type="button" onClick={logout}>
@@ -296,9 +317,8 @@ export function PatientDashboard() {
         </button>
       </header>
 
-      <section className="dashboard-panel">
+      <section className="dashboard-panel patient-dashboard-panel">
         <div>
-          <p className="eyebrow">Patient area</p>
           {isLoading ? <h2>Loading follow-up case...</h2> : null}
           {!isLoading && !activeCase ? <h2>No active follow-up case yet.</h2> : null}
           {activeCase ? (
@@ -315,33 +335,38 @@ export function PatientDashboard() {
               appointments={appointments}
               form={reportForm}
               formKey={reportFormKey}
+              expandedReportIds={expandedReportIds}
               isSubmitting={isSubmittingReport}
               message={message}
               onChange={handleReportChange}
               onEvaluate={handleEvaluateReport}
               onGenerateAdvice={handleGenerateAdvice}
               onSubmit={submitReport}
+              onToggleReport={toggleReport}
               escalations={escalations}
-              reports={reports}
+              reports={sortedReports}
               evaluatingReportId={evaluatingReportId}
               generatingAdviceId={generatingAdviceId}
             />
           ) : null}
           {error ? <p className="form-error">{error}</p> : null}
         </div>
-        <dl className="identity-list">
-          <div>
-            <dt>User</dt>
-            <dd>{user.username}</dd>
-          </div>
-          <div>
-            <dt>Role</dt>
-            <dd>{user.role}</dd>
-          </div>
-        </dl>
       </section>
     </main>
   )
+}
+
+function sortReportsNewestFirst(items) {
+  return [...items].sort((first, second) => {
+    const firstTime = new Date(first.created_at || 0).getTime()
+    const secondTime = new Date(second.created_at || 0).getTime()
+    return secondTime - firstTime || second.id - first.id
+  })
+}
+
+function defaultExpandedReportIds(items) {
+  const newestReport = sortReportsNewestFirst(items)[0]
+  return newestReport ? new Set([newestReport.id]) : new Set()
 }
 
 export function StaffDashboard() {
@@ -369,31 +394,33 @@ function ActiveCaseSummary({ activeCase, caseCount, onSwitchCase, selectedCaseIn
     <div className="case-summary">
       <div className="case-heading-row">
         <div>
+          <p className="eyebrow">Current follow-up case</p>
           <h2>{workflow.name || 'Assigned workflow unavailable'}</h2>
           <p className="muted-text case-position">
-            Treatment {selectedCaseIndex + 1} of {caseCount}
+            Case {selectedCaseIndex + 1} of {caseCount}
           </p>
           <StatusBadge value={activeCase.status} />
         </div>
-        <div className="case-switcher">
-          <button
-            className="secondary-button"
-            disabled={caseCount <= 1}
-            onClick={onSwitchCase}
-            type="button"
-          >
-            Switch case
-          </button>
+        {caseCount > 1 ? (
+          <div className="case-switcher">
+            <button className="secondary-button" onClick={onSwitchCase} type="button">
+              Switch case
+            </button>
+            <span aria-label="Follow-up case position" className="case-dots">
+              {Array.from({ length: caseCount }).map((_, index) => (
+                <span
+                  aria-current={index === selectedCaseIndex ? 'true' : undefined}
+                  className={`case-dot${index === selectedCaseIndex ? ' is-selected' : ''}`}
+                  key={index}
+                />
+              ))}
+            </span>
+          </div>
+        ) : (
           <span aria-label="Follow-up case position" className="case-dots">
-            {Array.from({ length: caseCount }).map((_, index) => (
-              <span
-                aria-current={index === selectedCaseIndex ? 'true' : undefined}
-                className={`case-dot${index === selectedCaseIndex ? ' is-selected' : ''}`}
-                key={index}
-              />
-            ))}
+            <span aria-current="true" className="case-dot is-selected" />
           </span>
-        </div>
+        )}
       </div>
       <dl className="identity-list case-list">
         <div>
@@ -429,6 +456,7 @@ function SymptomReportSection({
   activeCase,
   appointments,
   escalations,
+  expandedReportIds,
   form,
   formKey,
   evaluatingReportId,
@@ -439,6 +467,7 @@ function SymptomReportSection({
   onEvaluate,
   onGenerateAdvice,
   onSubmit,
+  onToggleReport,
   reports,
 }) {
   const canSubmitReport = !terminalCaseStatuses.has(activeCase.status)
@@ -524,9 +553,11 @@ function SymptomReportSection({
         appointments={appointments}
         escalations={escalations}
         evaluatingReportId={evaluatingReportId}
+        expandedReportIds={expandedReportIds}
         generatingAdviceId={generatingAdviceId}
         onEvaluate={onEvaluate}
         onGenerateAdvice={onGenerateAdvice}
+        onToggleReport={onToggleReport}
         reports={reports}
       />
     </div>
@@ -537,9 +568,11 @@ function ReportHistory({
   appointments,
   escalations,
   evaluatingReportId,
+  expandedReportIds,
   generatingAdviceId,
   onEvaluate,
   onGenerateAdvice,
+  onToggleReport,
   reports,
 }) {
   const appointmentByEscalation = new Map(
@@ -551,39 +584,116 @@ function ReportHistory({
     <div className="report-history">
       <h3>Report history</h3>
       {reports.length === 0 ? <p className="muted-text">No symptom reports yet.</p> : null}
-      <ul className="resource-list compact-list">
+      <ul className="report-accordion-list">
         {reports.map((report) => (
-          <li key={report.id}>
-            <span>
-              <strong>Day {report.day_after_treatment}</strong>
-              <small>
-                Pain {report.pain_level}/10 | Swelling {formatConstant(report.swelling)} |
-                Bleeding {formatConstant(report.bleeding)}
-              </small>
-              <small>
-                Fever {formatBoolean(report.fever)} | Bad smell/taste{' '}
-                {formatBoolean(report.bad_smell)}
-              </small>
-              {report.notes ? <small>{report.notes}</small> : null}
-              <RiskAssessmentSummary
-                assessment={report.risk_assessment}
-                appointment={
-                  escalationByReport.get(report.id)
-                    ? appointmentByEscalation.get(escalationByReport.get(report.id).id)
-                    : null
-                }
-                escalation={escalationByReport.get(report.id)}
-                evaluating={evaluatingReportId === report.id}
-                generatingAdvice={generatingAdviceId === report.risk_assessment?.id}
-                onEvaluate={() => onEvaluate(report.id)}
-                onGenerateAdvice={() => onGenerateAdvice(report.risk_assessment.id)}
-              />
-            </span>
-          </li>
+          <ReportHistoryItem
+            appointment={
+              escalationByReport.get(report.id)
+                ? appointmentByEscalation.get(escalationByReport.get(report.id).id)
+                : null
+            }
+            escalation={escalationByReport.get(report.id)}
+            evaluatingReportId={evaluatingReportId}
+            generatingAdviceId={generatingAdviceId}
+            isExpanded={expandedReportIds.has(report.id)}
+            key={report.id}
+            onEvaluate={onEvaluate}
+            onGenerateAdvice={onGenerateAdvice}
+            onToggle={() => onToggleReport(report.id)}
+            report={report}
+          />
         ))}
       </ul>
     </div>
   )
+}
+
+function ReportHistoryItem({
+  appointment,
+  escalation,
+  evaluatingReportId,
+  generatingAdviceId,
+  isExpanded,
+  onEvaluate,
+  onGenerateAdvice,
+  onToggle,
+  report,
+}) {
+  const reportDate = formatReportDate(report.created_at)
+  const reportTime = formatReportTime(report.created_at)
+
+  return (
+    <li className={`report-accordion-item${isExpanded ? ' is-expanded' : ''}`}>
+      <button
+        aria-expanded={isExpanded}
+        className="report-accordion-trigger"
+        onClick={onToggle}
+        type="button"
+      >
+        <span>
+          <strong>{reportDate}</strong>
+          <small>
+            {reportTime} | Day {report.day_after_treatment} | Pain {report.pain_level}/10
+          </small>
+        </span>
+        <span className="chevron" aria-hidden="true">
+          {isExpanded ? '⌃' : '⌄'}
+        </span>
+      </button>
+      {isExpanded ? (
+        <div className="report-accordion-body">
+          <dl className="report-detail-grid">
+            <div>
+              <dt>Pain level</dt>
+              <dd>{report.pain_level}/10</dd>
+            </div>
+            <div>
+              <dt>Swelling</dt>
+              <dd>{formatConstant(report.swelling)}</dd>
+            </div>
+            <div>
+              <dt>Bleeding</dt>
+              <dd>{formatConstant(report.bleeding)}</dd>
+            </div>
+            <div>
+              <dt>Fever</dt>
+              <dd>{formatBoolean(report.fever)}</dd>
+            </div>
+            <div>
+              <dt>Bad smell/taste</dt>
+              <dd>{formatBoolean(report.bad_smell)}</dd>
+            </div>
+          </dl>
+          {report.notes ? <p className="report-notes">{report.notes}</p> : null}
+          <RiskAssessmentSummary
+            assessment={report.risk_assessment}
+            appointment={appointment}
+            escalation={escalation}
+            evaluating={evaluatingReportId === report.id}
+            generatingAdvice={generatingAdviceId === report.risk_assessment?.id}
+            onEvaluate={() => onEvaluate(report.id)}
+            onGenerateAdvice={() => onGenerateAdvice(report.risk_assessment.id)}
+          />
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
+function formatReportDate(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return 'Report date unavailable'
+  }
+  return date.toLocaleDateString()
+}
+
+function formatReportTime(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return 'Time unavailable'
+  }
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 function RiskAssessmentSummary({
