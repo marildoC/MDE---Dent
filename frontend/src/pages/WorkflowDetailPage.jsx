@@ -18,6 +18,7 @@ import {
   validateWorkflow,
 } from '../api/workflows.js'
 import { useAuth } from '../auth/useAuth.js'
+import { formatConstant, statusClass } from '../utils/display.js'
 
 const emptyStage = { name: '', start_day: '', end_day: '', description: '', sort_order: 0 }
 const emptySymptom = {
@@ -70,6 +71,14 @@ function Section({ title, children }) {
       <h2>{title}</h2>
       {children}
     </section>
+  )
+}
+
+function ActiveWorkflowNotice() {
+  return (
+    <p className="state-note">
+      This workflow is active. Version 1 protects active workflow structures from direct edits.
+    </p>
   )
 }
 
@@ -298,10 +307,10 @@ export default function WorkflowDetailPage() {
     <main className="app-shell">
       <header className="top-bar">
         <div>
-          <p className="eyebrow">Workflow draft</p>
+          <p className="eyebrow">Workflow model</p>
           <h1>{workflow.name}</h1>
-          <span className={`status-badge status-${workflow.status.toLowerCase()}`}>
-            {workflow.status}
+          <span className={`status-badge ${statusClass(workflow.status)}`}>
+            {formatConstant(workflow.status)}
           </span>
         </div>
         <div className="button-row">
@@ -319,6 +328,7 @@ export default function WorkflowDetailPage() {
       <div className="workflow-grid">
         <Section title="Workflow">
           <div className="lifecycle-panel">
+            {isActive ? <ActiveWorkflowNotice /> : null}
             <div className="button-row">
               <button className="primary-button" type="button" onClick={handleValidate}>
                 Validate
@@ -369,13 +379,14 @@ export default function WorkflowDetailPage() {
                 value={workflowForm.description}
               />
             </label>
-            <button className="primary-button" type="submit">
+            <button className="primary-button" disabled={isActive} type="submit">
               Save workflow
             </button>
           </form>
         </Section>
 
         <Section title="Care Stages">
+          {isActive ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitStage}>
             <input
               placeholder="Name"
@@ -412,7 +423,7 @@ export default function WorkflowDetailPage() {
                 setStageForm((current) => ({ ...current, description: event.target.value }))
               }
             />
-            <button className="primary-button" type="submit">
+            <button className="primary-button" disabled={isActive} type="submit">
               Add stage
             </button>
           </form>
@@ -420,6 +431,7 @@ export default function WorkflowDetailPage() {
         </Section>
 
         <Section title="Symptoms">
+          {isActive ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitSymptom}>
             <div className="inline-fields">
               <input
@@ -457,14 +469,18 @@ export default function WorkflowDetailPage() {
                 setSymptomForm((current) => ({ ...current, allowed_values: event.target.value }))
               }
             />
-            <button className="primary-button" type="submit">
+            <button className="primary-button" disabled={isActive} type="submit">
               Add symptom
             </button>
           </form>
-          <ResourceList items={symptoms} getText={(symptom) => `${symptom.key}: ${symptom.label}`} />
+          <ResourceList
+            items={symptoms}
+            getText={(symptom) => `${symptom.label} (${symptom.key}) - ${formatConstant(symptom.data_type)}`}
+          />
         </Section>
 
         <Section title="Symptom Rules">
+          {isActive ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitRule}>
             <select
               required
@@ -528,14 +544,20 @@ export default function WorkflowDetailPage() {
                 setRuleForm((current) => ({ ...current, explanation: event.target.value }))
               }
             />
-            <button className="primary-button" type="submit">
+            <button className="primary-button" disabled={isActive} type="submit">
               Add rule
             </button>
           </form>
-          <ResourceList items={rules} getText={(rule) => `${rule.name}: ${rule.risk_level}`} />
+          <ResourceList
+            items={rules}
+            getText={(rule) =>
+              `${rule.name}: ${formatConstant(rule.risk_level)} / ${formatConstant(rule.recommended_action)}`
+            }
+          />
         </Section>
 
         <Section title="AI Advice Boundaries">
+          {isActive ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitBoundary}>
             <select
               value={boundaryForm.stage}
@@ -574,14 +596,22 @@ export default function WorkflowDetailPage() {
                 }))
               }
             />
-            <button className="primary-button" type="submit">
+            <button className="primary-button" disabled={isActive} type="submit">
               Add boundary
             </button>
           </form>
-          <ResourceList items={boundaries} getText={(boundary) => `Boundary ${boundary.id}`} />
+          <ResourceList
+            items={boundaries}
+            getText={(boundary) =>
+              `Boundary ${boundary.id}: forbids ${(boundary.forbidden_topics || [])
+                .map(formatConstant)
+                .join(', ')}`
+            }
+          />
         </Section>
 
         <Section title="Escalation Rules">
+          {isActive ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitEscalation}>
             <select
               required
@@ -628,11 +658,18 @@ export default function WorkflowDetailPage() {
                 setEscalationForm((current) => ({ ...current, message: event.target.value }))
               }
             />
-            <button className="primary-button" type="submit">
+            <button className="primary-button" disabled={isActive} type="submit">
               Add escalation
             </button>
           </form>
-          <ResourceList items={escalations} getText={(item) => `${item.target_role}: ${item.urgency}`} />
+          <ResourceList
+            items={escalations}
+            getText={(item) =>
+              `${formatConstant(item.target_role)} review: ${formatConstant(
+                item.urgency,
+              )} urgency, ${formatConstant(item.appointment_priority)} appointment priority`
+            }
+          />
         </Section>
       </div>
     </main>

@@ -120,18 +120,23 @@ The system is workflow-driven dental follow-up.
 - backend app test suite passes
 - Django system checks and migration dry-run pass
 - frontend lint and build pass
+- UI completion and demo flow milestone completed
+- existing React screens polished for demo clarity across:
+  - patient follow-up reporting and status review
+  - staff escalation and appointment handling
+  - admin workflow management and audit trace review
 
 ## Current project stage
-Testing and Reliability implemented and passing checks.
+UI Completion and Demo Flow implemented and passing checks.
 
 ## Current active milestone
-Milestone 12 - Testing and Reliability
+Milestone 13 - UI Completion and Demo Flow
 
 ## Immediate next objective
-Prepare for Milestone 13 - UI Completion and Demo Flow:
-- verify the browser demo flow for patient, staff, and admin users
-- keep UI work focused on implemented workflows
-- avoid new product features while polishing the existing demo path
+Prepare for Milestone 14 - Report and Diagram Alignment:
+- derive diagrams and written report content from the real implemented system
+- keep report claims aligned with tested backend behavior and actual UI flows
+- avoid documenting future features as if they already exist
 
 ## Fixed design decisions
 - First complete workflow: Post-Extraction Follow-Up
@@ -142,7 +147,6 @@ Prepare for Milestone 13 - UI Completion and Demo Flow:
 - Image upload is supporting evidence only
 
 ## What is intentionally not implemented yet
-- UI completion and demo polish
 - report and diagram alignment
 - cloud deployment
 

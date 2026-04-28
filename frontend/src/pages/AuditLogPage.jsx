@@ -2,24 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listAuditLogs } from '../api/audit.js'
 import { useAuth } from '../auth/useAuth.js'
-
-function formatDateTime(value) {
-  if (!value) {
-    return ''
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return date.toLocaleString()
-}
+import { formatConstant, formatDateTime, formatDetailKey } from '../utils/display.js'
 
 function formatDetails(details) {
   if (!details || Object.keys(details).length === 0) {
     return 'No details'
   }
   return Object.entries(details)
-    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+    .map(([key, value]) => `${formatDetailKey(key)}: ${Array.isArray(value) ? value.join(', ') : value}`)
     .join(' | ')
 }
 
@@ -78,6 +68,9 @@ export default function AuditLogPage() {
         <div>
           <p className="eyebrow">Traceability</p>
           <h2>System Audit Trail</h2>
+          <p className="muted-text">
+            Admin-only trace of workflow lifecycle and runtime actions.
+          </p>
         </div>
         {isLoading ? <p>Loading audit logs...</p> : null}
         {!isLoading && auditLogs.length === 0 ? <p>No audit logs yet.</p> : null}
@@ -85,10 +78,10 @@ export default function AuditLogPage() {
           {auditLogs.map((log) => (
             <li key={log.id}>
               <span>
-                <strong>{log.action}</strong>
+                <strong>{formatConstant(log.action)}</strong>
                 <small>{formatDateTime(log.created_at)}</small>
                 <small>
-                  Actor: {log.actor_detail?.username || 'System'} | Target: {log.target_type} #
+                  Actor: {log.actor_detail?.username || 'System'} | Target: {formatConstant(log.target_type)} #
                   {log.target_id}
                 </small>
                 <small>{log.target_repr}</small>

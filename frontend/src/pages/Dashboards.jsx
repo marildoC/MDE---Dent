@@ -7,22 +7,29 @@ import { listEscalationCases } from '../api/escalations.js'
 import { listMyFollowUpCases } from '../api/patients.js'
 import { createSymptomReport, listSymptomReports } from '../api/reports.js'
 import { useAuth } from '../auth/useAuth.js'
+import {
+  formatBoolean,
+  formatConstant,
+  formatDateTime,
+  riskClass,
+  statusClass,
+} from '../utils/display.js'
 
 const dashboardCopy = {
   patient: {
     eyebrow: 'Patient area',
     title: 'Patient Dashboard',
-    body: 'No active follow-up case yet.',
+    body: 'Follow your assigned recovery workflow, submit reports, and review staff updates.',
   },
   staff: {
     eyebrow: 'Dentist and staff area',
     title: 'Dentist/Staff Dashboard',
-    body: 'No escalated cases yet.',
+    body: 'Review follow-up cases, escalations, and appointment priorities.',
   },
   admin: {
     eyebrow: 'Admin area',
     title: 'Admin Dashboard',
-    body: 'Workflow management placeholder.',
+    body: 'Manage workflows, runtime cases, and audit traceability.',
   },
 }
 
@@ -59,6 +66,9 @@ function DashboardLayout({ variant }) {
           <p className="eyebrow">{copy.eyebrow}</p>
           <h2>{copy.body}</h2>
           {variant === 'admin' ? (
+            <DemoPathSummary />
+          ) : null}
+          {variant === 'admin' ? (
             <div className="button-row dashboard-actions">
               <Link className="primary-link" to="/admin/workflows">
                 Workflow management
@@ -89,6 +99,17 @@ function DashboardLayout({ variant }) {
         </dl>
       </section>
     </main>
+  )
+}
+
+function DemoPathSummary() {
+  return (
+    <ol className="demo-path-list">
+      <li>Verify an active Post-Extraction workflow.</li>
+      <li>Create or review the patient follow-up case.</li>
+      <li>Use patient reporting to trigger assessment, advice, escalation, and appointment flow.</li>
+      <li>Confirm traceability in audit logs.</li>
+    </ol>
   )
 }
 
@@ -352,6 +373,7 @@ function ActiveCaseSummary({ activeCase, caseCount, onSwitchCase, selectedCaseIn
           <p className="muted-text case-position">
             Treatment {selectedCaseIndex + 1} of {caseCount}
           </p>
+          <StatusBadge value={activeCase.status} />
         </div>
         <div className="case-switcher">
           <button
@@ -376,7 +398,7 @@ function ActiveCaseSummary({ activeCase, caseCount, onSwitchCase, selectedCaseIn
       <dl className="identity-list case-list">
         <div>
           <dt>Treatment type</dt>
-          <dd>{workflow.treatment_type || 'Unavailable'}</dd>
+          <dd>{formatConstant(workflow.treatment_type)}</dd>
         </div>
         <div>
           <dt>Treatment date</dt>
@@ -388,11 +410,19 @@ function ActiveCaseSummary({ activeCase, caseCount, onSwitchCase, selectedCaseIn
         </div>
         <div>
           <dt>Status</dt>
-          <dd>{activeCase.status}</dd>
+          <dd>{formatConstant(activeCase.status)}</dd>
         </div>
       </dl>
     </div>
   )
+}
+
+function StatusBadge({ value }) {
+  return <span className={`status-badge ${statusClass(value)}`}>{formatConstant(value)}</span>
+}
+
+function RiskBadge({ value }) {
+  return <span className={`status-badge ${riskClass(value)}`}>{formatConstant(value)}</span>
 }
 
 function SymptomReportSection({
@@ -418,6 +448,9 @@ function SymptomReportSection({
       {canSubmitReport ? (
         <form className="compact-form report-form" key={formKey} onSubmit={onSubmit}>
           <h3>Submit symptom report</h3>
+          <p className="muted-text form-context">
+            Images are optional supporting evidence for staff review only.
+          </p>
           <div className="inline-fields">
             <label>
               Pain level
@@ -481,7 +514,7 @@ function SymptomReportSection({
         <div className="terminal-case-notice">
           <h3>Symptom reporting closed</h3>
           <p>
-            This follow-up case is {activeCase.status.toLowerCase()}. Previous reports and
+            This follow-up case is {formatConstant(activeCase.status).toLowerCase()}. Previous reports and
             staff updates remain available below.
           </p>
         </div>
@@ -524,12 +557,12 @@ function ReportHistory({
             <span>
               <strong>Day {report.day_after_treatment}</strong>
               <small>
-                Pain {report.pain_level}/10 | Swelling {report.swelling} | Bleeding{' '}
-                {report.bleeding}
+                Pain {report.pain_level}/10 | Swelling {formatConstant(report.swelling)} |
+                Bleeding {formatConstant(report.bleeding)}
               </small>
               <small>
-                Fever {report.fever ? 'yes' : 'no'} | Bad smell/taste{' '}
-                {report.bad_smell ? 'yes' : 'no'}
+                Fever {formatBoolean(report.fever)} | Bad smell/taste{' '}
+                {formatBoolean(report.bad_smell)}
               </small>
               {report.notes ? <small>{report.notes}</small> : null}
               <RiskAssessmentSummary
@@ -581,9 +614,9 @@ function RiskAssessmentSummary({
   return (
     <span className="assessment-summary">
       <small>
-        Risk assessment: {assessment.risk_level} | Recommended action:{' '}
-        {assessment.recommended_action} | Appointment priority:{' '}
-        {assessment.appointment_priority}
+        Risk assessment: <RiskBadge value={assessment.risk_level} /> Recommended action:{' '}
+        {formatConstant(assessment.recommended_action)} | Appointment priority:{' '}
+        {formatConstant(assessment.appointment_priority)}
       </small>
       <small>Detected stage: {assessment.detected_stage_name || 'Unavailable'}</small>
       <small>Explanation: {assessment.explanation}</small>
@@ -606,7 +639,7 @@ function EscalationSummary({ appointment, escalation }) {
     <span className="escalation-summary">
       <small className="escalation-label">Staff review</small>
       <small>
-        Status: {escalation.status} | Urgency: {escalation.urgency}
+        Status: {formatConstant(escalation.status)} | Urgency: {formatConstant(escalation.urgency)}
       </small>
       {escalation.staff_response ? (
         <small>Staff response: {escalation.staff_response}</small>
@@ -623,7 +656,7 @@ function AppointmentSummary({ appointment }) {
     <span className="appointment-summary">
       <small className="appointment-label">Appointment</small>
       <small>
-        Priority: {appointment.priority} | Status: {appointment.status}
+        Priority: {formatConstant(appointment.priority)} | Status: {formatConstant(appointment.status)}
       </small>
       {appointment.scheduled_at ? <small>Scheduled: {formatDateTime(appointment.scheduled_at)}</small> : null}
       {appointment.notes ? <small>Notes: {appointment.notes}</small> : null}
@@ -631,22 +664,11 @@ function AppointmentSummary({ appointment }) {
   )
 }
 
-function formatDateTime(value) {
-  if (!value) {
-    return ''
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return date.toLocaleString()
-}
-
 function AdviceSummary({ advice, generating, onGenerate }) {
   if (advice) {
     return (
       <span className="advice-summary">
-        <small className="advice-label">Bounded advice</small>
+        <small className="advice-label">Supportive guidance</small>
         <small>{advice.message}</small>
       </span>
     )

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { createWorkflow, listWorkflows } from '../api/workflows.js'
 import { useAuth } from '../auth/useAuth.js'
+import { formatConstant, statusClass } from '../utils/display.js'
 
 const initialForm = {
   name: 'Post-Extraction Follow-Up',
@@ -89,16 +90,24 @@ export default function WorkflowListPage() {
 
         <section className="dashboard-panel list-panel">
           <div>
-            <p className="eyebrow">Draft structures</p>
+            <p className="eyebrow">Workflow model</p>
             <h2>Workflows</h2>
+            <p className="muted-text">
+              Use an active Post-Extraction workflow before assigning patient follow-up cases.
+            </p>
           </div>
           {isLoading ? <p>Loading workflows...</p> : null}
           {!isLoading && workflows.length === 0 ? <p>No workflows yet.</p> : null}
           <ul className="resource-list">
             {workflows.map((workflow) => (
               <li key={workflow.id}>
-                <Link to={`/admin/workflows/${workflow.id}`}>{workflow.name}</Link>
-                <span>{workflow.status}</span>
+                <span>
+                  <Link to={`/admin/workflows/${workflow.id}`}>{workflow.name}</Link>
+                  <small>{formatConstant(workflow.treatment_type)}</small>
+                </span>
+                <span className={`status-badge ${statusClass(workflow.status)}`}>
+                  {formatConstant(workflow.status)}
+                </span>
               </li>
             ))}
           </ul>

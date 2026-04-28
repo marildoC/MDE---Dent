@@ -14,6 +14,13 @@ import {
 import { listSymptomReports } from '../api/reports.js'
 import { listWorkflows } from '../api/workflows.js'
 import { useAuth } from '../auth/useAuth.js'
+import {
+  formatBoolean,
+  formatConstant,
+  formatDateTime,
+  riskClass,
+  statusClass,
+} from '../utils/display.js'
 
 const profileInitial = {
   allergies: '',
@@ -67,6 +74,10 @@ const terminalAppointmentStatuses = new Set(['COMPLETED', 'CANCELLED'])
 function statusOptions(currentStatus, transitions, labels) {
   const values = [currentStatus, ...(transitions[currentStatus] || [])]
   return values.map((value) => ({ label: labels[value] || value, value }))
+}
+
+function RiskBadge({ value }) {
+  return <span className={`status-badge ${riskClass(value)}`}>{formatConstant(value)}</span>
 }
 
 function buildEscalationDrafts(escalations) {
@@ -441,6 +452,9 @@ export default function FollowUpManagementPage() {
         <div className="stacked-panels">
           <form className="panel-form" onSubmit={submitProfile}>
             <h2>Create Patient Profile</h2>
+            <p className="muted-text form-context">
+              Create a minimal patient profile before assigning an active workflow.
+            </p>
             <label>
               Patient user
               <select name="user" onChange={handleProfileChange} required value={profileForm.user}>
@@ -487,6 +501,9 @@ export default function FollowUpManagementPage() {
 
           <form className="panel-form" onSubmit={submitCase}>
             <h2>Create Follow-Up Case</h2>
+            <p className="muted-text form-context">
+              Only active workflows can be assigned to patients.
+            </p>
             <label>
               Patient profile
               <select name="patient" onChange={handleCaseChange} required value={caseForm.patient}>
@@ -508,6 +525,9 @@ export default function FollowUpManagementPage() {
                   </option>
                 ))}
               </select>
+              {activeWorkflows.length === 0 ? (
+                <small className="muted-text">No active workflows are available yet.</small>
+              ) : null}
             </label>
             <label>
               Treatment date
@@ -520,7 +540,7 @@ export default function FollowUpManagementPage() {
               />
             </label>
             <label>
-              Assigned staff user id
+              Assigned staff user ID (optional)
               <input
                 min="1"
                 name="assigned_staff"
@@ -543,6 +563,10 @@ export default function FollowUpManagementPage() {
           <div>
             <p className="eyebrow">Runtime cases</p>
             <h2>Current Follow-Up Cases</h2>
+            <p className="muted-text">
+              Review reports, deterministic assessments, staff review, and appointment handling
+              from one place.
+            </p>
           </div>
           {isLoading ? <p>Loading cases...</p> : null}
           {!isLoading && cases.length === 0 ? <p>No follow-up cases yet.</p> : null}
@@ -552,6 +576,10 @@ export default function FollowUpManagementPage() {
                 <span>
                   <strong>{item.patient_detail.user_detail.username}</strong>
                   <small>{item.workflow_detail.name}</small>
+                  <small>
+                    Treatment date: {item.treatment_date} | Staff:{' '}
+                    {item.assigned_staff_detail?.username || 'Unassigned'}
+                  </small>
                   <CaseReportList
                     appointmentByEscalation={appointmentByEscalation}
                     escalationByReport={escalationByReport}
@@ -562,7 +590,9 @@ export default function FollowUpManagementPage() {
                     reports={reportsByCase[item.id] || []}
                   />
                 </span>
-                <span>{item.status}</span>
+                <span className={`status-badge ${statusClass(item.status)}`}>
+                  {formatConstant(item.status)}
+                </span>
               </li>
             ))}
           </ul>
@@ -614,8 +644,8 @@ function CaseReportList({
         <span className="report-summary-item" key={report.id}>
           <small>
             Report day {report.day_after_treatment}: pain {report.pain_level}/10, swelling{' '}
-            {report.swelling}, bleeding {report.bleeding}, fever {report.fever ? 'yes' : 'no'},
-            bad smell/taste {report.bad_smell ? 'yes' : 'no'}
+            {formatConstant(report.swelling)}, bleeding {formatConstant(report.bleeding)}, fever{' '}
+            {formatBoolean(report.fever)}, bad smell/taste {formatBoolean(report.bad_smell)}
           </small>
           <RiskAssessmentSummary
             assessment={report.risk_assessment}
@@ -664,9 +694,9 @@ function RiskAssessmentSummary({
   return (
     <span className="assessment-summary">
       <small>
-        Risk assessment: {assessment.risk_level} | Recommended action:{' '}
-        {assessment.recommended_action} | Appointment priority:{' '}
-        {assessment.appointment_priority}
+        Risk assessment: <RiskBadge value={assessment.risk_level} /> Recommended action:{' '}
+        {formatConstant(assessment.recommended_action)} | Appointment priority:{' '}
+        {formatConstant(assessment.appointment_priority)}
       </small>
       <small>Detected stage: {assessment.detected_stage_name || 'Unavailable'}</small>
       <small>Explanation: {assessment.explanation}</small>
@@ -694,7 +724,7 @@ function EscalationSummary({ appointment, escalation }) {
     <span className="escalation-summary">
       <small className="escalation-label">Staff review</small>
       <small>
-        Status: {escalation.status} | Urgency: {escalation.urgency}
+        Status: {formatConstant(escalation.status)} | Urgency: {formatConstant(escalation.urgency)}
       </small>
       {escalation.staff_response ? <small>Response: {escalation.staff_response}</small> : null}
       {appointment ? <AppointmentSummary appointment={appointment} /> : null}
@@ -707,7 +737,7 @@ function AppointmentSummary({ appointment }) {
     <span className="appointment-summary">
       <small className="appointment-label">Appointment</small>
       <small>
-        Priority: {appointment.priority} | Status: {appointment.status}
+        Priority: {formatConstant(appointment.priority)} | Status: {formatConstant(appointment.status)}
       </small>
       {appointment.scheduled_at ? <small>Scheduled: {formatDateTime(appointment.scheduled_at)}</small> : null}
       {appointment.notes ? <small>Notes: {appointment.notes}</small> : null}
@@ -820,12 +850,12 @@ function EscalationReviewCard({
     <li className={`escalation-card${compact ? ' is-compact' : ''}`}>
       <span>
         <strong>
-          {patient} - {escalation.urgency}
+          {patient} - {formatConstant(escalation.urgency)}
         </strong>
         <small>{workflow}</small>
         <small>
           Report day {report.day_after_treatment}: pain {report.pain_level}/10, swelling{' '}
-          {report.swelling}, fever {report.fever ? 'yes' : 'no'}
+          {formatConstant(report.swelling)}, fever {formatBoolean(report.fever)}
         </small>
         {compact ? (
           <>
@@ -839,7 +869,9 @@ function EscalationReviewCard({
           </>
         ) : (
           <>
-            <small>Risk action: {escalation.risk_assessment_detail?.recommended_action}</small>
+            <small>
+              Risk action: {formatConstant(escalation.risk_assessment_detail?.recommended_action)}
+            </small>
             {escalation.advice_message ? (
               <small>Bounded advice: {escalation.advice_message.message}</small>
             ) : null}
@@ -898,7 +930,9 @@ function EscalationReviewCard({
           </>
         )}
       </span>
-      <span>{escalation.status}</span>
+      <span className={`status-badge ${statusClass(escalation.status)}`}>
+        {formatConstant(escalation.status)}
+      </span>
     </li>
   )
 }
@@ -978,22 +1012,11 @@ function AppointmentControls({ appointment, draft, escalation, isSaving, onDraft
   )
 }
 
-function formatDateTime(value) {
-  if (!value) {
-    return ''
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return date.toLocaleString()
-}
-
 function AdviceSummary({ advice, generating, onGenerate }) {
   if (advice) {
     return (
       <span className="advice-summary">
-        <small className="advice-label">Bounded advice</small>
+        <small className="advice-label">Patient guidance</small>
         <small>{advice.message}</small>
       </span>
     )
