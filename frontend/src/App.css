@@ -552,14 +552,32 @@
   margin-bottom: 6px;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .admin-intelligence-panel {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  height: calc(100svh - 150px);
+  min-height: 620px;
   max-width: 1120px;
+  overflow: hidden;
+  padding: 0;
 }
 
 .admin-intelligence-intro {
   border-bottom: 1px solid #e3ebe8;
-  padding-bottom: 18px;
+  flex: 0 0 auto;
+  padding: 22px 28px 18px;
 }
 
 .admin-intelligence-intro h2 {
@@ -568,8 +586,10 @@
 
 .intelligence-query-box {
   display: grid;
-  gap: 12px;
-  margin-top: 20px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .intelligence-query-box label {
@@ -587,8 +607,9 @@
   border-radius: 8px;
   color: #182622;
   font: inherit;
-  min-height: 104px;
-  padding: 14px;
+  min-height: 48px;
+  max-height: 126px;
+  padding: 12px 13px;
   resize: vertical;
 }
 
@@ -598,14 +619,24 @@
 }
 
 .intelligence-query-box .primary-button {
-  justify-self: end;
+  min-height: 48px;
+  white-space: nowrap;
 }
 
 .suggestion-strip {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 0;
+  max-height: 82px;
+  overflow-y: auto;
+}
+
+.intelligence-composer {
+  flex: 0 0 auto;
+  border-top: 1px solid #e3ebe8;
+  background: #ffffff;
+  padding: 14px 18px 18px;
 }
 
 .suggestion-chip {
@@ -627,8 +658,14 @@
 
 .chat-history {
   display: grid;
+  align-content: start;
+  flex: 1 1 auto;
   gap: 16px;
-  margin-top: 24px;
+  min-height: 0;
+  margin-top: 0;
+  overflow-y: auto;
+  padding: 22px 28px;
+  background: #fbfdfc;
 }
 
 .empty-chat-state {
@@ -785,6 +822,12 @@
   font-size: 12px;
   font-weight: 700;
   padding: 5px 8px;
+}
+
+.answer-followups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .report-form,
@@ -1200,5 +1243,25 @@
   .assistant-message {
     margin-left: 0;
     margin-right: 0;
+  }
+
+  .admin-intelligence-panel {
+    height: calc(100svh - 120px);
+    min-height: 0;
+  }
+
+  .admin-intelligence-intro,
+  .chat-history,
+  .intelligence-composer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .intelligence-query-box {
+    grid-template-columns: 1fr;
+  }
+
+  .intelligence-query-box .primary-button {
+    justify-self: stretch;
   }
 }

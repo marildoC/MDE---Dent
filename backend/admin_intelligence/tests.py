@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -93,8 +93,8 @@ class AdminIntelligenceAPITests(APITestCase):
             escalation_case=self.escalation,
             risk_assessment=self.assessment,
             priority=AppointmentPriority.HIGH,
-            status=AppointmentStatus.SCHEDULED,
-            scheduled_at=timezone.now() + timedelta(hours=1),
+            status=AppointmentStatus.PRIORITY_SUGGESTED,
+            scheduled_at=timezone.make_aware(datetime.combine(timezone.localdate(), time(10, 30))),
             created_by=self.admin,
         )
         record_audit(
@@ -145,11 +145,27 @@ class AdminIntelligenceAPITests(APITestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_unsupported_question_returns_safe_response(self):
-        response = self.ask("Can you prescribe antibiotics for patient1?")
+        response = self.ask("Can you show patient billing trends?")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(response.data["display_type"], {"unsupported", "summary"})
-        self.assertNotIn("prescribe antibiotics", response.data["answer"].lower())
+        self.assertEqual(response.data["display_type"], "unsupported")
+        self.assertGreaterEqual(len(response.data["suggested_followups"]), 1)
+
+    def test_keyword_specific_unsupported_suggestions(self):
+        examples = [
+            ("Can you show patient billing trends?", "Show latest follow-up case for patient1"),
+            ("Can you optimize appointment staffing?", "Show completed appointments today"),
+            ("Can escalation workload be forecast?", "Show unresolved urgent escalations"),
+            ("Can workflow revenue be predicted?", "Show active workflows"),
+            ("Can history anomalies be scored?", "Show recent audit events"),
+            ("Can risk trends be forecast?", "Show high-risk reports today"),
+        ]
+
+        for question, expected_suggestion in examples:
+            response = self.ask(question)
+            self.assertEqual(response.status_code, 200, question)
+            self.assertEqual(response.data["display_type"], "unsupported", question)
+            self.assertIn(expected_suggestion, response.data["suggested_followups"], question)
 
     def test_latest_follow_up_case_by_patient(self):
         response = self.ask("Show latest follow-up case for patient1")
@@ -165,6 +181,52 @@ class AdminIntelligenceAPITests(APITestCase):
         self.assertEqual(response.data["intent"], "appointments_scheduled_today")
         self.assertEqual(response.data["data"]["count"], 1)
         self.assertEqual(response.data["rows"][0]["patient"], "patient1")
+        self.assertEqual(response.data["rows"][0]["status"], AppointmentStatus.PRIORITY_SUGGESTED)
+
+    def test_appointments_with_status_scheduled_today_filters_status(self):
+        response = self.ask("How many appointments with status scheduled today?")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["intent"], "appointments_scheduled_today")
+        self.assertEqual(response.data["data"]["count"], 0)
+
+    def test_patient_count_question(self):
+        response = self.ask("How many patients are in this clinic?")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["intent"], "patient_count")
+        self.assertEqual(response.data["data"]["count"], 1)
+
+    def test_active_follow_up_case_count_question(self):
+        response = self.ask("How many active follow-up cases are there?")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["intent"], "total_active_follow_up_cases")
+        self.assertEqual(response.data["data"]["count"], 1)
+
+    def test_reports_submitted_today_question(self):
+        response = self.ask("How many reports were submitted today?")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["intent"], "reports_submitted_today")
+        self.assertEqual(response.data["data"]["count"], 1)
+
+    def test_unresolved_escalations_count_question(self):
+        response = self.ask("How many unresolved escalations exist?")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["intent"], "count_unresolved_escalations")
+        self.assertEqual(response.data["data"]["count"], 1)
+
+    def test_appointment_required_cases_question(self):
+        self.case.status = "APPOINTMENT_REQUIRED"
+        self.case.save(update_fields=["status"])
+
+        response = self.ask("Show appointment-required cases")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["intent"], "appointment_required_cases")
+        self.assertEqual(response.data["data"]["count"], 1)
 
     def test_unresolved_urgent_escalations(self):
         urgent_report = SymptomReport.objects.create(

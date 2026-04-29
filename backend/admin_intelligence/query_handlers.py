@@ -1,6 +1,7 @@
+from collections import Counter
 from datetime import datetime, time, timedelta
 
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from appointments.models import Appointment, AppointmentStatus
@@ -11,6 +12,8 @@ from escalations.models import EscalationCase, EscalationStatus
 from patients.models import FollowUpCase, FollowUpCaseStatus, PatientProfile
 from reports.models import SymptomReport
 from workflows.models import RiskLevel, TreatmentWorkflow, WorkflowStatus
+
+from .suggestions import suggestions_for
 
 
 UNSUPPORTED_MESSAGE = (
@@ -27,17 +30,18 @@ UNRESOLVED_ESCALATION_STATUSES = (
 )
 
 
-def unsupported_response():
+def unsupported_response(question=""):
     return response(
-        answer=UNSUPPORTED_MESSAGE,
+        answer="I cannot answer that yet. Try one of these supported operational questions:",
         intent="unsupported",
         display_type="unsupported",
-        suggested_followups=[
-            "Show recent audit events",
-            "Show unresolved escalations",
-            "How many appointments are scheduled today?",
-        ],
+        data={"scope": UNSUPPORTED_MESSAGE},
+        suggested_followups=suggested_questions_for_unsupported(question),
     )
+
+
+def suggested_questions_for_unsupported(question):
+    return suggestions_for(question)[:6]
 
 
 def patient_not_found_response(patient_name):
@@ -186,16 +190,109 @@ def reports_for_latest_case(patient):
     )
 
 
-def appointments_scheduled_today():
-    appointments = appointments_for_today().filter(status=AppointmentStatus.SCHEDULED)
-    rows = [appointment_row(item) for item in appointments]
+def patient_count():
+    count = PatientProfile.objects.count()
     return response(
-        answer=f"There are {len(rows)} appointments scheduled today.",
+        answer=f"There are {count} patient profile{'s' if count != 1 else ''} in the clinic.",
+        intent="patient_count",
+        display_type="summary",
+        data={"count": count},
+        suggested_followups=[
+            "How many active follow-up cases are there?",
+            "Show appointment-required cases",
+            "Show unresolved escalations",
+        ],
+    )
+
+
+def total_active_follow_up_cases():
+    cases = FollowUpCase.objects.filter(status=FollowUpCaseStatus.ACTIVE).select_related(
+        "patient__user", "workflow"
+    )
+    cards = [case_card(item) for item in cases]
+    return response(
+        answer=f"There are {len(cards)} active follow-up case{'s' if len(cards) != 1 else ''}.",
+        intent="total_active_follow_up_cases",
+        display_type="cards" if cards else "summary",
+        data={"count": len(cards)},
+        cards=cards,
+        evidence=[case_evidence(item) for item in cases],
+        suggested_followups=[
+            "How many patient profiles exist?",
+            "Show reports submitted today",
+            "Show unresolved escalations",
+        ],
+    )
+
+
+def reports_submitted_today():
+    start, end = day_bounds()
+    reports = SymptomReport.objects.filter(
+        created_at__gte=start,
+        created_at__lt=end,
+    ).select_related(
+        "follow_up_case",
+        "follow_up_case__patient",
+        "follow_up_case__patient__user",
+        "risk_assessment",
+    )
+    rows = [report_row(item) for item in reports]
+    return response(
+        answer=f"There are {len(rows)} report{'s' if len(rows) != 1 else ''} submitted today.",
+        intent="reports_submitted_today",
+        display_type="table" if rows else "summary",
+        data={"count": len(rows)},
+        columns=report_columns(),
+        rows=rows,
+        evidence=[report_evidence(item) for item in reports],
+        suggested_followups=report_followups(),
+    )
+
+
+def count_unresolved_escalations():
+    escalations = EscalationCase.objects.filter(status__in=UNRESOLVED_ESCALATION_STATUSES)
+    total = escalations.count()
+    high = escalations.filter(urgency=RiskLevel.HIGH).count()
+    urgent = escalations.filter(urgency=RiskLevel.URGENT).count()
+    return response(
+        answer=f"There are {total} unresolved escalation{'s' if total != 1 else ''}.",
+        intent="count_unresolved_escalations",
+        display_type="summary",
+        data={"count": total, "high": high, "urgent": urgent},
+        suggested_followups=escalation_followups(),
+    )
+
+
+def appointment_required_cases():
+    cases = appointment_required_case_queryset()
+    cards = [case_card(item) for item in cases]
+    return response(
+        answer=(
+            f"Found {len(cards)} appointment-required case{'s' if len(cards) != 1 else ''}."
+        ),
+        intent="appointment_required_cases",
+        display_type="cards" if cards else "summary",
+        data={"count": len(cards)},
+        cards=cards,
+        evidence=[case_evidence(item) for item in cases],
+        suggested_followups=appointment_followups(),
+    )
+
+
+def appointments_scheduled_today(status_scheduled=False):
+    appointments = appointments_for_today()
+    if status_scheduled:
+        appointments = appointments.filter(status=AppointmentStatus.SCHEDULED)
+    rows = [appointment_row(item) for item in appointments]
+    status_counts = dict(Counter(item.status for item in appointments))
+    status_clause = " with status scheduled" if status_scheduled else " with a scheduled time"
+    return response(
+        answer=f"There are {len(rows)} appointments{status_clause} today.",
         intent="appointments_scheduled_today",
         display_type="table" if rows else "summary",
         columns=appointment_columns(),
         rows=rows,
-        data={"count": len(rows)},
+        data={"count": len(rows), "status_breakdown": status_counts},
         evidence=[appointment_evidence(item) for item in appointments],
         suggested_followups=appointment_followups(),
     )
@@ -238,11 +335,7 @@ def appointments_for_patient(patient):
 
 
 def appointment_required_without_scheduled():
-    cases = (
-        FollowUpCase.objects.filter(status=FollowUpCaseStatus.APPOINTMENT_REQUIRED)
-        .select_related("patient__user", "workflow", "assigned_staff")
-        .distinct()
-    )
+    cases = appointment_required_case_queryset()
     filtered = [
         item
         for item in cases
@@ -266,7 +359,7 @@ def appointment_required_without_scheduled():
 
 def cancelled_appointments():
     appointments = Appointment.objects.filter(status=AppointmentStatus.CANCELLED).select_related(
-        "patient__user", "follow_up_case", "follow_up_case__workflow"
+        "patient__user", "follow_up_case", "follow_up_case__workflow", "escalation_case"
     )
     rows = [appointment_row(item) for item in appointments]
     return response(
@@ -286,7 +379,7 @@ def completed_appointments_today():
         status=AppointmentStatus.COMPLETED,
         updated_at__gte=start,
         updated_at__lt=end,
-    ).select_related("patient__user", "follow_up_case", "follow_up_case__workflow")
+    ).select_related("patient__user", "follow_up_case", "follow_up_case__workflow", "escalation_case")
     rows = [appointment_row(item) for item in appointments]
     return response(
         answer=f"Found {len(rows)} appointments completed today.",
@@ -674,7 +767,23 @@ def appointments_for_today():
     return Appointment.objects.filter(
         scheduled_at__gte=start,
         scheduled_at__lt=end,
-    ).select_related("patient__user", "follow_up_case", "follow_up_case__workflow")
+    ).select_related(
+        "patient__user",
+        "follow_up_case",
+        "follow_up_case__workflow",
+        "escalation_case",
+    )
+
+
+def appointment_required_case_queryset():
+    return (
+        FollowUpCase.objects.filter(
+            Q(status=FollowUpCaseStatus.APPOINTMENT_REQUIRED)
+            | Q(escalation_cases__status=EscalationStatus.APPOINTMENT_REQUIRED)
+        )
+        .select_related("patient__user", "workflow", "assigned_staff")
+        .distinct()
+    )
 
 
 def day_bounds(day=None):
@@ -695,10 +804,12 @@ def week_bounds():
 def escalation_queryset(queryset):
     return queryset.select_related(
         "patient__user",
+        "report",
         "follow_up_case",
         "follow_up_case__workflow",
         "risk_assessment",
         "assigned_staff",
+        "appointment",
     ).order_by("-created_at", "-id")
 
 
@@ -734,10 +845,11 @@ def case_card(follow_up_case):
     )
     fields = [
         {"label": "Patient", "value": follow_up_case.patient.user.username},
-        {"label": "Workflow", "value": follow_up_case.workflow.name},
-        {"label": "Treatment date", "value": str(follow_up_case.treatment_date)},
+        {"label": "Follow-up case", "value": follow_up_case.id},
+        {"label": "Workflow/treatment", "value": follow_up_case.workflow.name},
         {"label": "Status", "value": follow_up_case.status},
-        {"label": "Reports", "value": report_count},
+        {"label": "Treatment date", "value": str(follow_up_case.treatment_date)},
+        {"label": "Reports count", "value": report_count},
     ]
     if latest_assessment:
         fields.append({"label": "Latest risk", "value": latest_assessment.risk_level})
@@ -749,14 +861,17 @@ def escalation_card(escalation):
         "title": f"Escalation #{escalation.id}",
         "fields": [
             {"label": "Patient", "value": escalation.patient.user.username},
-            {"label": "Case", "value": escalation.follow_up_case_id},
-            {"label": "Workflow", "value": escalation.follow_up_case.workflow.name},
             {"label": "Urgency", "value": escalation.urgency},
             {"label": "Status", "value": escalation.status},
+            {"label": "Report day", "value": escalation.report.day_after_treatment},
             {"label": "Risk level", "value": escalation.risk_assessment.risk_level},
             {
                 "label": "Staff response",
                 "value": "Recorded" if escalation.staff_response else "Not recorded",
+            },
+            {
+                "label": "Appointment exists",
+                "value": "Yes" if hasattr(escalation, "appointment") else "No",
             },
             {"label": "Updated", "value": format_dt(escalation.updated_at)},
         ],
@@ -765,24 +880,24 @@ def escalation_card(escalation):
 
 def appointment_columns():
     return [
-        {"key": "scheduled_at", "label": "Scheduled"},
         {"key": "patient", "label": "Patient"},
-        {"key": "case_id", "label": "Case"},
-        {"key": "workflow", "label": "Workflow"},
+        {"key": "scheduled_at", "label": "Scheduled time/date"},
         {"key": "priority", "label": "Priority"},
         {"key": "status", "label": "Status"},
+        {"key": "follow_up_case", "label": "Follow-up case"},
+        {"key": "escalation_status", "label": "Escalation status"},
     ]
 
 
 def appointment_row(appointment):
     return {
         "id": appointment.id,
-        "scheduled_at": format_dt(appointment.scheduled_at) if appointment.scheduled_at else "Unscheduled",
         "patient": appointment.patient.user.username,
-        "case_id": appointment.follow_up_case_id,
-        "workflow": appointment.follow_up_case.workflow.name,
+        "scheduled_at": format_dt(appointment.scheduled_at) if appointment.scheduled_at else "Unscheduled",
         "priority": appointment.priority,
         "status": appointment.status,
+        "follow_up_case": appointment.follow_up_case_id,
+        "escalation_status": appointment.escalation_case.status,
     }
 
 

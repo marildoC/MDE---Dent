@@ -6,6 +6,7 @@ from patients.models import PatientProfile
 from workflows.models import RiskLevel
 
 from . import query_handlers as handlers
+from .text import normalize
 
 
 def execute_query(question):
@@ -19,11 +20,7 @@ def execute_query(question):
             ),
             intent="clinical_question_blocked",
             display_type="unsupported",
-            suggested_followups=[
-                "Show latest high-risk reports",
-                "Show unresolved escalations",
-                "Show reports for patient1's latest case",
-            ],
+            suggested_followups=handlers.suggested_questions_for_unsupported(question),
         )
 
     patient = find_patient(normalized)
@@ -32,7 +29,22 @@ def execute_query(question):
     if has_all(normalized, ["appointment", "update", "today"]):
         return handlers.appointment_updates_today()
 
-    if "follow up case" in normalized or "follow-up case" in normalized or "case" in normalized:
+    if is_patient_count_question(normalized):
+        return handlers.patient_count()
+
+    if is_total_active_follow_up_cases_question(normalized):
+        return handlers.total_active_follow_up_cases()
+
+    if is_reports_submitted_today_question(normalized):
+        return handlers.reports_submitted_today()
+
+    if is_unresolved_escalation_count_question(normalized):
+        return handlers.count_unresolved_escalations()
+
+    if is_appointment_required_cases_question(normalized):
+        return handlers.appointment_required_cases()
+
+    if "follow up case" in normalized or "case" in normalized:
         if has_any(normalized, ["how many", "count"]) and "case" in normalized:
             return with_patient(patient, patient_candidate, handlers.count_follow_up_cases_for_patient)
         if has_all(normalized, ["status", "latest", "case"]):
@@ -46,7 +58,9 @@ def execute_query(question):
 
     if is_appointment_question(normalized):
         if has_all(normalized, ["how many", "scheduled", "today"]):
-            return handlers.appointments_scheduled_today()
+            return handlers.appointments_scheduled_today(
+                status_scheduled=asks_for_scheduled_status(normalized)
+            )
         if has_any(normalized, ["today", "todays", "today's"]) and not has_any(
             normalized, ["completed", "update"]
         ):
@@ -92,11 +106,11 @@ def execute_query(question):
             return handlers.active_workflows(count_only=True)
         if "active" in normalized:
             return handlers.active_workflows()
-        if "by status" in normalized:
+        if "by status" in normalized or "status count" in normalized:
             return handlers.workflows_by_status()
         if has_all(normalized, ["most", "escalation"]):
             return handlers.workflow_with_most_escalations()
-        if "post extraction" in normalized or "post-extraction" in normalized:
+        if "post extraction" in normalized:
             return handlers.post_extraction_workflow_status()
 
     if is_audit_question(normalized):
@@ -114,17 +128,7 @@ def execute_query(question):
         if "recent" in normalized or "audit" in normalized:
             return handlers.recent_audit_events()
 
-    return handlers.unsupported_response()
-
-
-def normalize(value):
-    normalized = value.lower()
-    normalized = normalized.replace("’", "'").replace("‘", "'").replace("“", '"').replace("”", '"')
-    normalized = normalized.replace("follow-up", "follow up")
-    normalized = normalized.replace("post-extraction", "post extraction")
-    normalized = re.sub(r"[^a-z0-9_#'\s-]", " ", normalized)
-    normalized = re.sub(r"\s+", " ", normalized).strip()
-    return normalized
+    return handlers.unsupported_response(question)
 
 
 def asks_for_diagnosis(normalized):
@@ -159,7 +163,44 @@ def is_report_or_risk_question(normalized):
 
 
 def is_audit_question(normalized):
-    return "audit" in normalized or "trace" in normalized or "actions did" in normalized or "activated workflow" in normalized
+    return (
+        "audit" in normalized
+        or "trace" in normalized
+        or "actions did" in normalized
+        or ("actions" in normalized and "today" in normalized)
+        or "activated workflow" in normalized
+    )
+
+
+def is_patient_count_question(normalized):
+    return (
+        has_any(normalized, ["how many", "count"])
+        and ("patients" in normalized or "patient profiles" in normalized)
+    ) or "patient profiles exist" in normalized
+
+
+def is_total_active_follow_up_cases_question(normalized):
+    return has_any(normalized, ["how many", "count"]) and has_all(
+        normalized, ["active", "follow up", "case"]
+    )
+
+
+def is_reports_submitted_today_question(normalized):
+    return "report" in normalized and "today" in normalized and "submitted" in normalized
+
+
+def is_unresolved_escalation_count_question(normalized):
+    return has_any(normalized, ["how many", "count"]) and has_all(
+        normalized, ["unresolved", "escalation"]
+    )
+
+
+def is_appointment_required_cases_question(normalized):
+    return "appointment required" in normalized and "without" not in normalized
+
+
+def asks_for_scheduled_status(normalized):
+    return "status scheduled" in normalized or "with status scheduled" in normalized
 
 
 def has_any(normalized, words):
