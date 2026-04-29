@@ -226,6 +226,10 @@
   gap: 16px;
 }
 
+.staff-action-grid {
+  grid-template-columns: minmax(0, 420px);
+}
+
 .admin-action-card {
   display: flex;
   min-height: 154px;
@@ -303,6 +307,11 @@
   display: grid;
   grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
   gap: 20px;
+}
+
+.split-layout.review-only-layout {
+  max-width: 1120px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .split-layout .list-panel {

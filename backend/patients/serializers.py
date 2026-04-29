@@ -72,10 +72,7 @@ class PatientProfileWithUserSerializer(serializers.Serializer):
     @transaction.atomic
     def create(self, validated_data):
         user = User.objects.create_user(
-            username=unique_patient_username(
-                validated_data["first_name"],
-                validated_data["last_name"],
-            ),
+            username=unique_patient_username(validated_data["first_name"]),
             email=validated_data["email"],
             password=validated_data["password"],
             first_name=validated_data["first_name"],
@@ -90,10 +87,8 @@ class PatientProfileWithUserSerializer(serializers.Serializer):
         )
 
 
-def unique_patient_username(first_name, last_name):
-    first = username_part(first_name)
-    last = username_part(last_name)
-    base = ".".join(part for part in [first, last] if part) or "patient"
+def unique_patient_username(first_name):
+    base = username_part(first_name) or "patient"
     username = base
     suffix = 2
 

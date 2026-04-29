@@ -86,16 +86,26 @@ function DashboardLayout({ variant }) {
             />
           </div>
         </section>
+      ) : variant === 'staff' ? (
+        <section className="dashboard-panel admin-dashboard-panel staff-dashboard-panel">
+          <div className="admin-dashboard-intro">
+            <p className="eyebrow">Staff review</p>
+            <h2>Review follow-up cases, escalations, and appointment priorities.</h2>
+            <p className="muted-text">Signed in as {user.username}</p>
+          </div>
+          <div className="admin-action-grid staff-action-grid">
+            <AdminActionCard
+              body="Review patient reports, escalations, staff responses, and appointments."
+              label="Follow-up cases"
+              to="/follow-up-cases"
+            />
+          </div>
+        </section>
       ) : (
         <section className="dashboard-panel">
           <div>
             <p className="eyebrow">{copy.eyebrow}</p>
             <h2>{copy.body}</h2>
-            {variant === 'staff' ? (
-              <Link className="primary-link" to="/follow-up-cases">
-                Follow-up cases
-              </Link>
-            ) : null}
           </div>
           <dl className="identity-list">
             <div>

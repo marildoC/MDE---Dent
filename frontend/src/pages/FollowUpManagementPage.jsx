@@ -169,7 +169,7 @@ function buildAppointmentDrafts(escalations, appointments) {
 }
 
 export default function FollowUpManagementPage() {
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
   const [appointments, setAppointments] = useState([])
   const [appointmentDrafts, setAppointmentDrafts] = useState({})
   const [profiles, setProfiles] = useState([])
@@ -245,6 +245,7 @@ export default function FollowUpManagementPage() {
     () => findDuplicatePatientProfile(profiles, profileForm.first_name, profileForm.last_name),
     [profileForm.first_name, profileForm.last_name, profiles],
   )
+  const isAdmin = user?.role === 'ADMIN'
 
   async function fetchData() {
     const requests = {
@@ -348,11 +349,12 @@ export default function FollowUpManagementPage() {
   }, [])
 
   const handleProfileChange = (event) => {
+    const field = event.target.dataset.field || event.target.name
     setProfileError('')
     setProfileMessage('')
     setProfileForm((current) => ({
       ...current,
-      [event.target.name]: event.target.value,
+      [field]: event.target.value,
     }))
   }
 
@@ -554,9 +556,10 @@ export default function FollowUpManagementPage() {
 
       {error ? <p className="form-error page-error">{error}</p> : null}
 
-      <section className="split-layout">
-        <div className="stacked-panels">
-          <form className="panel-form" onSubmit={submitProfile}>
+      <section className={`split-layout${isAdmin ? '' : ' review-only-layout'}`}>
+        {isAdmin ? (
+          <div className="stacked-panels">
+          <form autoComplete="off" className="panel-form" onSubmit={submitProfile}>
             <h2>Create Patient Profile</h2>
             <p className="muted-text form-context">
               Create a patient login and profile before assigning an active workflow.
@@ -564,7 +567,9 @@ export default function FollowUpManagementPage() {
             <label>
               First name
               <input
-                name="first_name"
+                autoComplete="off"
+                data-field="first_name"
+                name="new_patient_first_name"
                 onChange={handleProfileChange}
                 required
                 value={profileForm.first_name}
@@ -573,7 +578,9 @@ export default function FollowUpManagementPage() {
             <label>
               Last name
               <input
-                name="last_name"
+                autoComplete="off"
+                data-field="last_name"
+                name="new_patient_last_name"
                 onChange={handleProfileChange}
                 required
                 value={profileForm.last_name}
@@ -587,7 +594,9 @@ export default function FollowUpManagementPage() {
             <label>
               Email
               <input
-                name="email"
+                autoComplete="new-email"
+                data-field="email"
+                name="new_patient_contact_email"
                 onChange={handleProfileChange}
                 required
                 type="email"
@@ -597,7 +606,9 @@ export default function FollowUpManagementPage() {
             <label>
               Password
               <input
-                name="password"
+                autoComplete="new-password"
+                data-field="password"
+                name="new_patient_login_secret"
                 onChange={handleProfileChange}
                 required
                 type="password"
@@ -606,12 +617,20 @@ export default function FollowUpManagementPage() {
             </label>
             <label>
               Phone
-              <input name="phone" onChange={handleProfileChange} value={profileForm.phone} />
+              <input
+                autoComplete="off"
+                data-field="phone"
+                name="new_patient_phone"
+                onChange={handleProfileChange}
+                value={profileForm.phone}
+              />
             </label>
             <label>
               Allergies
               <textarea
-                name="allergies"
+                autoComplete="off"
+                data-field="allergies"
+                name="new_patient_allergies"
                 onChange={handleProfileChange}
                 value={profileForm.allergies}
               />
@@ -619,7 +638,9 @@ export default function FollowUpManagementPage() {
             <label>
               Dental notes
               <textarea
-                name="dental_notes"
+                autoComplete="off"
+                data-field="dental_notes"
+                name="new_patient_dental_notes"
                 onChange={handleProfileChange}
                 value={profileForm.dental_notes}
               />
@@ -705,6 +726,7 @@ export default function FollowUpManagementPage() {
             </button>
           </form>
         </div>
+        ) : null}
 
         <div className="operations-column">
           <EscalationQueue
@@ -862,8 +884,7 @@ function SearchablePatientSelector({
         />
         {selectedProfile ? (
           <small className="selected-patient-meta">
-            Selected: {patientProfileLabel(selectedProfile)} | username:{' '}
-            {patientProfileUsername(selectedProfile)}
+            Selected: {patientProfileLabel(selectedProfile)}
           </small>
         ) : null}
         {isOpen ? (
@@ -883,7 +904,6 @@ function SearchablePatientSelector({
                     type="button"
                   >
                     <span>{patientProfileLabel(profile)}</span>
-                    <small>username: {patientProfileUsername(profile)}</small>
                   </button>
                 ))}
                 {matchingProfiles.length > visibleProfiles.length ? (
