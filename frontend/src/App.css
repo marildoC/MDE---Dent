@@ -219,11 +219,13 @@
 }
 
 .stacked-panels {
+  align-self: start;
   display: grid;
   gap: 20px;
 }
 
 .split-layout {
+  align-items: start;
   display: grid;
   grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
   gap: 20px;
@@ -233,6 +235,12 @@
   max-width: none;
   min-width: 0;
   margin: 0;
+}
+
+.operations-column {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
 }
 
 .workflow-grid {
@@ -340,6 +348,87 @@
   color: #1d6f60;
   font-weight: 700;
   text-decoration: none;
+}
+
+.accordion-list {
+  gap: 12px;
+}
+
+.resource-list .accordion-item {
+  align-items: stretch;
+  display: block;
+  justify-content: initial;
+  overflow: hidden;
+  padding: 0;
+}
+
+.accordion-item.is-expanded {
+  border-color: #c8d8d3;
+  box-shadow: 0 10px 24px rgba(22, 51, 45, 0.06);
+}
+
+.accordion-trigger {
+  align-items: center;
+  background: #fbfdfc;
+  border: 0;
+  color: #14231f;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 14px 16px;
+  text-align: left;
+  width: 100%;
+}
+
+.accordion-trigger strong {
+  display: block;
+}
+
+.accordion-trigger small {
+  color: #607872;
+  display: block;
+  margin-top: 4px;
+}
+
+.accordion-trigger .status-badge {
+  margin-top: 0;
+}
+
+.accordion-body {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.patient-case-body {
+  background: #ffffff;
+}
+
+.case-accordion-list {
+  margin-top: 0;
+}
+
+.case-item {
+  background: #ffffff;
+}
+
+.case-trigger-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.case-detail-body,
+.escalation-detail-body {
+  border-top: 1px solid #e3ebe8;
+}
+
+.escalation-detail-summary {
+  display: grid;
+  gap: 5px;
 }
 
 .compact-list li {
@@ -629,36 +718,36 @@
 }
 
 .escalation-queue {
-  border-top: 1px solid #e3ebe8;
-  display: grid;
-  gap: 12px;
-  margin-top: 24px;
-  padding-top: 18px;
+  display: block;
 }
 
 .escalation-card {
-  align-items: flex-start;
+  background: #fbfdfc;
 }
 
-.escalation-card.is-compact {
-  background: #fbfdfc;
+.escalation-group {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.escalation-group h3 {
+  color: #293b37;
+  font-size: 18px;
+  margin: 0;
+}
+
+.escalation-list {
+  margin-top: 0;
 }
 
 .handled-escalations {
   border-top: 1px solid #eef3f1;
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
   padding-top: 16px;
-}
-
-.handled-escalations h3 {
-  margin: 0;
 }
 
 .handled-list {
   gap: 8px;
-  margin-top: 4px;
 }
 
 .escalation-controls {

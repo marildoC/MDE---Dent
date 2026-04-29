@@ -139,7 +139,10 @@ export default function FollowUpManagementPage() {
   const [cases, setCases] = useState([])
   const [escalations, setEscalations] = useState([])
   const [escalationDrafts, setEscalationDrafts] = useState({})
-  const [expandedHandledEscalations, setExpandedHandledEscalations] = useState({})
+  const [expandedEscalations, setExpandedEscalations] = useState({})
+  const [editingEscalations, setEditingEscalations] = useState({})
+  const [expandedPatients, setExpandedPatients] = useState({})
+  const [expandedCases, setExpandedCases] = useState({})
   const [reports, setReports] = useState([])
   const [workflows, setWorkflows] = useState([])
   const [profileForm, setProfileForm] = useState(profileInitial)
@@ -194,6 +197,7 @@ export default function FollowUpManagementPage() {
     () => escalations.filter((escalation) => !activeEscalationStatuses.has(escalation.status)),
     [escalations],
   )
+  const patientCaseGroups = useMemo(() => groupCasesByPatient(cases), [cases])
 
   async function fetchData() {
     const requests = {
@@ -243,7 +247,10 @@ export default function FollowUpManagementPage() {
     setEscalations(data.escalationsData)
     setEscalationDrafts(buildEscalationDrafts(data.escalationsData))
     setAppointmentDrafts(buildAppointmentDrafts(data.escalationsData, data.appointmentsData))
-    setExpandedHandledEscalations((current) => pruneExpandedEscalations(current, data.escalationsData))
+    setExpandedEscalations((current) => pruneExpandedMap(current, getEscalationIds(data.escalationsData)))
+    setEditingEscalations((current) => pruneExpandedMap(current, getEscalationIds(data.escalationsData)))
+    setExpandedPatients((current) => pruneExpandedMap(current, getPatientIds(data.casesData)))
+    setExpandedCases((current) => pruneExpandedMap(current, data.casesData.map((item) => item.id)))
     setReports(data.reportsData)
     setWorkflows(data.workflowsData)
     setError(data.error)
@@ -264,8 +271,18 @@ export default function FollowUpManagementPage() {
         setEscalations(data.escalationsData)
         setEscalationDrafts(buildEscalationDrafts(data.escalationsData))
         setAppointmentDrafts(buildAppointmentDrafts(data.escalationsData, data.appointmentsData))
-        setExpandedHandledEscalations((current) =>
-          pruneExpandedEscalations(current, data.escalationsData),
+        setExpandedEscalations((current) =>
+          pruneExpandedMap(current, getEscalationIds(data.escalationsData)),
+        )
+        setEditingEscalations((current) =>
+          pruneExpandedMap(current, getEscalationIds(data.escalationsData)),
+        )
+        setExpandedPatients((current) => pruneExpandedMap(current, getPatientIds(data.casesData)))
+        setExpandedCases((current) =>
+          pruneExpandedMap(
+            current,
+            data.casesData.map((item) => item.id),
+          ),
         )
         setReports(data.reportsData)
         setWorkflows(data.workflowsData)
@@ -422,10 +439,35 @@ export default function FollowUpManagementPage() {
     }
   }
 
-  const toggleHandledEscalation = (escalationId) => {
-    setExpandedHandledEscalations((current) => ({
+  const toggleEscalation = (escalationId) => {
+    setExpandedEscalations((current) => ({
       ...current,
       [escalationId]: !current[escalationId],
+    }))
+  }
+
+  const toggleEscalationEditing = (escalationId) => {
+    setExpandedEscalations((current) => ({
+      ...current,
+      [escalationId]: true,
+    }))
+    setEditingEscalations((current) => ({
+      ...current,
+      [escalationId]: !current[escalationId],
+    }))
+  }
+
+  const togglePatient = (patientId) => {
+    setExpandedPatients((current) => ({
+      ...current,
+      [patientId]: !current[patientId],
+    }))
+  }
+
+  const toggleCase = (caseId) => {
+    setExpandedCases((current) => ({
+      ...current,
+      [caseId]: !current[caseId],
     }))
   }
 
@@ -559,69 +601,228 @@ export default function FollowUpManagementPage() {
           </form>
         </div>
 
-        <section className="dashboard-panel list-panel">
-          <div>
-            <p className="eyebrow">Runtime cases</p>
-            <h2>Current Follow-Up Cases</h2>
-            <p className="muted-text">
-              Review reports, deterministic assessments, staff review, and appointment handling
-              from one place.
-            </p>
-          </div>
-          {isLoading ? <p>Loading cases...</p> : null}
-          {!isLoading && cases.length === 0 ? <p>No follow-up cases yet.</p> : null}
-          <ul className="resource-list">
-            {cases.map((item) => (
-              <li key={item.id}>
-                <span>
-                  <strong>{item.patient_detail.user_detail.username}</strong>
-                  <small>{item.workflow_detail.name}</small>
-                  <small>
-                    Treatment date: {item.treatment_date} | Staff:{' '}
-                    {item.assigned_staff_detail?.username || 'Unassigned'}
-                  </small>
-                  <CaseReportList
-                    appointmentByEscalation={appointmentByEscalation}
-                    escalationByReport={escalationByReport}
-                    evaluatingReportId={evaluatingReportId}
-                    generatingAdviceId={generatingAdviceId}
-                    onEvaluate={handleEvaluateReport}
-                    onGenerateAdvice={handleGenerateAdvice}
-                    reports={reportsByCase[item.id] || []}
-                  />
-                </span>
-                <span className={`status-badge ${statusClass(item.status)}`}>
-                  {formatConstant(item.status)}
-                </span>
-              </li>
-            ))}
-          </ul>
-
+        <div className="operations-column">
           <EscalationQueue
             activeEscalations={activeEscalations}
             appointmentByEscalation={appointmentByEscalation}
             appointmentDrafts={appointmentDrafts}
             drafts={escalationDrafts}
-            expandedHandledEscalations={expandedHandledEscalations}
+            editingEscalations={editingEscalations}
+            expandedEscalations={expandedEscalations}
             handledEscalations={handledEscalations}
             onAppointmentDraftChange={handleAppointmentDraftChange}
             onAppointmentSave={handleAppointmentSave}
             onDraftChange={handleEscalationDraftChange}
-            onToggleHandled={toggleHandledEscalation}
+            onToggle={toggleEscalation}
+            onToggleEdit={toggleEscalationEditing}
             onUpdate={handleEscalationUpdate}
             updatingAppointmentId={updatingAppointmentId}
             updatingEscalationId={updatingEscalationId}
           />
-        </section>
+
+          <section className="dashboard-panel list-panel">
+            <div>
+              <p className="eyebrow">Runtime cases</p>
+              <h2>Runtime Follow-Up Cases</h2>
+              <p className="muted-text">
+                Patients are grouped first; expand a patient to review their follow-up cases,
+                reports, deterministic assessments, advice, escalation, and appointments.
+              </p>
+            </div>
+            {isLoading ? <p>Loading cases...</p> : null}
+            {!isLoading && cases.length === 0 ? <p>No follow-up cases yet.</p> : null}
+            <ul className="resource-list accordion-list patient-case-list">
+              {patientCaseGroups.map((group) => (
+                <PatientCaseGroup
+                  appointmentByEscalation={appointmentByEscalation}
+                  escalationByReport={escalationByReport}
+                  evaluatingReportId={evaluatingReportId}
+                  expandedCases={expandedCases}
+                  generatingAdviceId={generatingAdviceId}
+                  group={group}
+                  isExpanded={Boolean(expandedPatients[group.patientId])}
+                  key={group.patientId}
+                  onEvaluate={handleEvaluateReport}
+                  onGenerateAdvice={handleGenerateAdvice}
+                  onToggle={() => togglePatient(group.patientId)}
+                  onToggleCase={toggleCase}
+                  reportsByCase={reportsByCase}
+                />
+              ))}
+            </ul>
+          </section>
+        </div>
       </section>
     </main>
   )
 }
 
-function pruneExpandedEscalations(current, escalations) {
-  const availableIds = new Set(escalations.map((escalation) => String(escalation.id)))
+function pruneExpandedMap(current, ids) {
+  const availableIds = new Set(ids.map((id) => String(id)))
   return Object.fromEntries(
-    Object.entries(current).filter(([escalationId]) => availableIds.has(escalationId)),
+    Object.entries(current).filter(([itemId]) => availableIds.has(itemId)),
+  )
+}
+
+function getEscalationIds(escalations) {
+  return escalations.map((escalation) => escalation.id)
+}
+
+function patientKeyForCase(item) {
+  return item.patient || item.patient_detail?.id || `case-${item.id}`
+}
+
+function getPatientIds(casesData) {
+  return Array.from(new Set(casesData.map((item) => patientKeyForCase(item))))
+}
+
+function groupCasesByPatient(casesData) {
+  const grouped = new Map()
+
+  casesData.forEach((item) => {
+    const patientId = patientKeyForCase(item)
+    const existing = grouped.get(patientId) || {
+      cases: [],
+      patientDetail: item.patient_detail,
+      patientId,
+    }
+
+    existing.cases.push(item)
+    grouped.set(patientId, existing)
+  })
+
+  return Array.from(grouped.values()).sort((left, right) =>
+    patientName(left.patientDetail).localeCompare(patientName(right.patientDetail)),
+  )
+}
+
+function patientName(patientDetail) {
+  return patientDetail?.user_detail?.username || 'Unknown patient'
+}
+
+function latestReport(reports) {
+  return reports[reports.length - 1] || null
+}
+
+function PatientCaseGroup({
+  appointmentByEscalation,
+  escalationByReport,
+  evaluatingReportId,
+  expandedCases,
+  generatingAdviceId,
+  group,
+  isExpanded,
+  onEvaluate,
+  onGenerateAdvice,
+  onToggle,
+  onToggleCase,
+  reportsByCase,
+}) {
+  const caseCount = group.cases.length
+  const reportCount = group.cases.reduce(
+    (total, item) => total + (reportsByCase[item.id]?.length || 0),
+    0,
+  )
+  const activeCaseCount = group.cases.filter((item) => !['RESOLVED', 'CLOSED'].includes(item.status))
+    .length
+
+  return (
+    <li className={`accordion-item patient-item${isExpanded ? ' is-expanded' : ''}`}>
+      <button className="accordion-trigger" onClick={onToggle} type="button">
+        <span>
+          <strong>{patientName(group.patientDetail)}</strong>
+          <small>
+            {caseCount} follow-up {caseCount === 1 ? 'case' : 'cases'} | {reportCount} symptom{' '}
+            {reportCount === 1 ? 'report' : 'reports'} | {activeCaseCount} active
+          </small>
+        </span>
+        <span className="chevron" aria-hidden="true">
+          {isExpanded ? '-' : '+'}
+        </span>
+      </button>
+
+      {isExpanded ? (
+        <div className="accordion-body patient-case-body">
+          <ul className="resource-list accordion-list case-accordion-list">
+            {group.cases.map((item) => (
+              <FollowUpCaseItem
+                appointmentByEscalation={appointmentByEscalation}
+                caseItem={item}
+                escalationByReport={escalationByReport}
+                evaluatingReportId={evaluatingReportId}
+                generatingAdviceId={generatingAdviceId}
+                isExpanded={Boolean(expandedCases[item.id])}
+                key={item.id}
+                onEvaluate={onEvaluate}
+                onGenerateAdvice={onGenerateAdvice}
+                onToggle={() => onToggleCase(item.id)}
+                reports={reportsByCase[item.id] || []}
+              />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
+function FollowUpCaseItem({
+  appointmentByEscalation,
+  caseItem,
+  escalationByReport,
+  evaluatingReportId,
+  generatingAdviceId,
+  isExpanded,
+  onEvaluate,
+  onGenerateAdvice,
+  onToggle,
+  reports,
+}) {
+  const latest = latestReport(reports)
+
+  return (
+    <li className={`accordion-item case-item${isExpanded ? ' is-expanded' : ''}`}>
+      <button className="accordion-trigger case-trigger" onClick={onToggle} type="button">
+        <span>
+          <strong>{caseItem.workflow_detail.name}</strong>
+          <small>
+            Treatment date: {caseItem.treatment_date} | Staff:{' '}
+            {caseItem.assigned_staff_detail?.username || 'Unassigned'}
+          </small>
+          <small>
+            Reports: {reports.length}
+            {latest?.risk_assessment ? (
+              <>
+                {' '}
+                | Latest risk: <RiskBadge value={latest.risk_assessment.risk_level} />
+              </>
+            ) : null}
+          </small>
+        </span>
+        <span className="case-trigger-actions">
+          <span className={`status-badge ${statusClass(caseItem.status)}`}>
+            {formatConstant(caseItem.status)}
+          </span>
+          <span className="chevron" aria-hidden="true">
+            {isExpanded ? '-' : '+'}
+          </span>
+        </span>
+      </button>
+
+      {isExpanded ? (
+        <div className="accordion-body case-detail-body">
+          <CaseReportList
+            appointmentByEscalation={appointmentByEscalation}
+            escalationByReport={escalationByReport}
+            evaluatingReportId={evaluatingReportId}
+            generatingAdviceId={generatingAdviceId}
+            onEvaluate={onEvaluate}
+            onGenerateAdvice={onGenerateAdvice}
+            reports={reports}
+          />
+        </div>
+      ) : null}
+    </li>
   )
 }
 
@@ -750,72 +951,82 @@ function EscalationQueue({
   appointmentByEscalation,
   appointmentDrafts,
   drafts,
-  expandedHandledEscalations,
+  editingEscalations,
+  expandedEscalations,
   handledEscalations,
   onAppointmentDraftChange,
   onAppointmentSave,
   onDraftChange,
-  onToggleHandled,
+  onToggle,
+  onToggleEdit,
   onUpdate,
   updatingAppointmentId,
   updatingEscalationId,
 }) {
   return (
-    <section className="escalation-queue">
+    <section className="dashboard-panel list-panel escalation-queue">
       <div>
         <p className="eyebrow">Staff review</p>
-        <h2>Active Escalation Queue</h2>
+        <h2>Escalation Queue</h2>
+        <p className="muted-text">
+          Urgent staff actions are listed first. Expand an item to inspect details, then use Edit
+          review when staff action is needed.
+        </p>
       </div>
-      {activeEscalations.length === 0 ? (
-        <p className="muted-text">No active escalation items need attention.</p>
-      ) : null}
-      <ul className="resource-list">
-        {activeEscalations.map((escalation) => (
-          <EscalationReviewCard
-            appointment={appointmentByEscalation[escalation.id]}
-            appointmentDraft={appointmentDrafts[escalation.id] || {}}
-            draft={drafts[escalation.id] || {}}
-            escalation={escalation}
-            isSaving={updatingEscalationId === escalation.id}
-            key={escalation.id}
-            onAppointmentDraftChange={onAppointmentDraftChange}
-            onAppointmentSave={onAppointmentSave}
-            onDraftChange={onDraftChange}
-            onUpdate={onUpdate}
-            updatingAppointmentId={updatingAppointmentId}
-          />
-        ))}
-      </ul>
 
-      <section className="handled-escalations">
-        <div>
-          <p className="eyebrow">Reviewed / handled</p>
-          <h3>Handled Escalations</h3>
-        </div>
+      <section className="escalation-group">
+        <h3>Active</h3>
+        {activeEscalations.length === 0 ? (
+          <p className="muted-text">No active escalation items need attention.</p>
+        ) : null}
+        <ul className="resource-list accordion-list escalation-list">
+          {activeEscalations.map((escalation) => (
+            <EscalationReviewCard
+              appointment={appointmentByEscalation[escalation.id]}
+              appointmentDraft={appointmentDrafts[escalation.id] || {}}
+              draft={drafts[escalation.id] || {}}
+              escalation={escalation}
+              isEditing={Boolean(editingEscalations[escalation.id])}
+              isExpanded={Boolean(expandedEscalations[escalation.id])}
+              isSaving={updatingEscalationId === escalation.id}
+              key={escalation.id}
+              onAppointmentDraftChange={onAppointmentDraftChange}
+              onAppointmentSave={onAppointmentSave}
+              onDraftChange={onDraftChange}
+              onToggle={() => onToggle(escalation.id)}
+              onToggleEdit={() => onToggleEdit(escalation.id)}
+              onUpdate={onUpdate}
+              updatingAppointmentId={updatingAppointmentId}
+            />
+          ))}
+        </ul>
+      </section>
+
+      <section className="escalation-group handled-escalations">
+        <h3>Handled / Reviewed</h3>
         {handledEscalations.length === 0 ? (
           <p className="muted-text">No reviewed escalations yet.</p>
         ) : null}
-        <ul className="resource-list handled-list">
-          {handledEscalations.map((escalation) => {
-            const isExpanded = Boolean(expandedHandledEscalations[escalation.id])
-            return (
-              <EscalationReviewCard
-                appointment={appointmentByEscalation[escalation.id]}
-                appointmentDraft={appointmentDrafts[escalation.id] || {}}
-                compact={!isExpanded}
-                draft={drafts[escalation.id] || {}}
-                escalation={escalation}
-                isSaving={updatingEscalationId === escalation.id}
-                key={escalation.id}
-                onAppointmentDraftChange={onAppointmentDraftChange}
-                onAppointmentSave={onAppointmentSave}
-                onDraftChange={onDraftChange}
-                onToggle={() => onToggleHandled(escalation.id)}
-                onUpdate={onUpdate}
-                updatingAppointmentId={updatingAppointmentId}
-              />
-            )
-          })}
+        <ul className="resource-list accordion-list escalation-list handled-list">
+          {handledEscalations.map((escalation) => (
+            <EscalationReviewCard
+              appointment={appointmentByEscalation[escalation.id]}
+              appointmentDraft={appointmentDrafts[escalation.id] || {}}
+              draft={drafts[escalation.id] || {}}
+              escalation={escalation}
+              isEditing={Boolean(editingEscalations[escalation.id])}
+              isExpanded={Boolean(expandedEscalations[escalation.id])}
+              isSaving={updatingEscalationId === escalation.id}
+              key={escalation.id}
+              onAppointmentDraftChange={onAppointmentDraftChange}
+              onAppointmentSave={onAppointmentSave}
+              onDraftChange={onDraftChange}
+              onToggle={() => onToggle(escalation.id)}
+              onToggleEdit={() => onToggleEdit(escalation.id)}
+              onUpdate={onUpdate}
+              updatingAppointmentId={updatingAppointmentId}
+            />
+          ))}
         </ul>
       </section>
     </section>
@@ -825,14 +1036,16 @@ function EscalationQueue({
 function EscalationReviewCard({
   appointment,
   appointmentDraft,
-  compact = false,
   draft,
   escalation,
+  isEditing,
+  isExpanded,
   isSaving,
   onAppointmentDraftChange,
   onAppointmentSave,
   onDraftChange,
   onToggle,
+  onToggleEdit,
   onUpdate,
   updatingAppointmentId,
 }) {
@@ -847,92 +1060,113 @@ function EscalationReviewCard({
   const isClosed = escalation.status === 'CLOSED'
 
   return (
-    <li className={`escalation-card${compact ? ' is-compact' : ''}`}>
-      <span>
-        <strong>
-          {patient} - {formatConstant(escalation.urgency)}
-        </strong>
-        <small>{workflow}</small>
-        <small>
-          Report day {report.day_after_treatment}: pain {report.pain_level}/10, swelling{' '}
-          {formatConstant(report.swelling)}, fever {formatBoolean(report.fever)}
-        </small>
-        {compact ? (
-          <>
-            {escalation.staff_response ? (
-              <small>Response: {escalation.staff_response}</small>
-            ) : null}
-            {appointment ? <AppointmentSummary appointment={appointment} /> : null}
-            <button className="secondary-button compact-button" onClick={onToggle} type="button">
-              Edit review
-            </button>
-          </>
-        ) : (
-          <>
+    <li className={`accordion-item escalation-card${isExpanded ? ' is-expanded' : ''}`}>
+      <button className="accordion-trigger escalation-trigger" onClick={onToggle} type="button">
+        <span>
+          <strong>
+            {patient} - {formatConstant(escalation.urgency)}
+          </strong>
+          <small>{workflow}</small>
+          <small>
+            Report day {report.day_after_treatment}: pain {report.pain_level}/10, swelling{' '}
+            {formatConstant(report.swelling)}, fever {formatBoolean(report.fever)}
+          </small>
+        </span>
+        <span className="case-trigger-actions">
+          <span className={`status-badge ${statusClass(escalation.status)}`}>
+            {formatConstant(escalation.status)}
+          </span>
+          <span className="chevron" aria-hidden="true">
+            {isExpanded ? '-' : '+'}
+          </span>
+        </span>
+      </button>
+
+      {isExpanded ? (
+        <div className="accordion-body escalation-detail-body">
+          <div className="escalation-detail-summary">
+            <small>
+              Report details: bleeding {formatConstant(report.bleeding)}, bad smell/taste{' '}
+              {formatBoolean(report.bad_smell)}
+            </small>
             <small>
               Risk action: {formatConstant(escalation.risk_assessment_detail?.recommended_action)}
             </small>
+            {escalation.staff_response ? (
+              <small>Current response: {escalation.staff_response}</small>
+            ) : (
+              <small>No staff response recorded yet.</small>
+            )}
             {escalation.advice_message ? (
               <small>Bounded advice: {escalation.advice_message.message}</small>
             ) : null}
-            <AppointmentControls
-              appointment={appointment}
-              draft={appointmentDraft}
-              escalation={escalation}
-              isSaving={
-                updatingAppointmentId === appointment?.id ||
-                updatingAppointmentId === `new-${escalation.id}`
-              }
-              onDraftChange={onAppointmentDraftChange}
-              onSave={onAppointmentSave}
-            />
-            <div className="escalation-controls">
-              <label>
-                Status
-                <select
-                  disabled={isClosed}
-                  onChange={(event) => onDraftChange(escalation.id, 'status', event.target.value)}
-                  value={draft.status || escalation.status}
-                >
-                  {escalationOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Staff response
-                <textarea
-                  disabled={isClosed}
-                  onChange={(event) =>
-                    onDraftChange(escalation.id, 'staff_response', event.target.value)
-                  }
-                  value={draft.staff_response || ''}
-                />
-              </label>
-              <div className="button-row review-actions">
-                <button
-                  className="primary-button compact-button"
-                  disabled={isSaving || isClosed}
-                  onClick={() => onUpdate(escalation.id)}
-                  type="button"
-                >
-                  {isSaving ? 'Saving...' : 'Save review'}
-                </button>
-                {onToggle ? (
-                  <button className="secondary-button compact-button" onClick={onToggle} type="button">
-                    Collapse
+            {appointment ? <AppointmentSummary appointment={appointment} /> : null}
+          </div>
+
+          <div className="button-row review-actions">
+            <button
+              className="secondary-button compact-button"
+              disabled={isClosed}
+              onClick={onToggleEdit}
+              type="button"
+            >
+              {isEditing ? 'Close editor' : 'Edit review'}
+            </button>
+          </div>
+
+          {isEditing ? (
+            <>
+              <AppointmentControls
+                appointment={appointment}
+                draft={appointmentDraft}
+                escalation={escalation}
+                isSaving={
+                  updatingAppointmentId === appointment?.id ||
+                  updatingAppointmentId === `new-${escalation.id}`
+                }
+                onDraftChange={onAppointmentDraftChange}
+                onSave={onAppointmentSave}
+              />
+              <div className="escalation-controls">
+                <label>
+                  Status
+                  <select
+                    disabled={isClosed}
+                    onChange={(event) => onDraftChange(escalation.id, 'status', event.target.value)}
+                    value={draft.status || escalation.status}
+                  >
+                    {escalationOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Staff response
+                  <textarea
+                    disabled={isClosed}
+                    onChange={(event) =>
+                      onDraftChange(escalation.id, 'staff_response', event.target.value)
+                    }
+                    value={draft.staff_response || ''}
+                  />
+                </label>
+                <div className="button-row review-actions">
+                  <button
+                    className="primary-button compact-button"
+                    disabled={isSaving || isClosed}
+                    onClick={() => onUpdate(escalation.id)}
+                    type="button"
+                  >
+                    {isSaving ? 'Saving...' : 'Save review'}
                   </button>
-                ) : null}
+                </div>
               </div>
-            </div>
-          </>
-        )}
-      </span>
-      <span className={`status-badge ${statusClass(escalation.status)}`}>
-        {formatConstant(escalation.status)}
-      </span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </li>
   )
 }
