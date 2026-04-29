@@ -1,6 +1,7 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework import status
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
 from accounts.models import User, UserRole
@@ -9,6 +10,7 @@ from .models import FollowUpCase, FollowUpCaseStatus, PatientProfile
 from .serializers import (
     FollowUpCaseSerializer,
     PatientProfileSerializer,
+    PatientProfileWithUserSerializer,
     PatientUserSerializer,
 )
 
@@ -99,6 +101,21 @@ def my_active_case(request):
         return Response(None)
 
     return Response(FollowUpCaseSerializer(case).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_profile_with_user(request):
+    if not is_staff_or_admin(request.user):
+        return Response({"detail": "Only staff/admin can create patient profiles."}, status=403)
+
+    serializer = PatientProfileWithUserSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    profile = serializer.save()
+    return Response(
+        PatientProfileSerializer(profile, context={"request": request}).data,
+        status=status.HTTP_201_CREATED,
+    )
 
 
 @api_view(["GET"])

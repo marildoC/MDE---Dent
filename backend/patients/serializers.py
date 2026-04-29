@@ -1,4 +1,7 @@
+import re
+
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework import serializers
 
 from accounts.models import User, UserRole
@@ -40,6 +43,69 @@ class PatientProfileSerializer(serializers.ModelSerializer):
         if user.role != UserRole.PATIENT:
             raise serializers.ValidationError("Patient profile user must have PATIENT role.")
         return user
+
+
+class PatientProfileWithUserSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    password = serializers.CharField(trim_whitespace=False, write_only=True)
+    phone = serializers.CharField(allow_blank=True, max_length=40, required=False)
+    allergies = serializers.CharField(allow_blank=True, required=False)
+    dental_notes = serializers.CharField(allow_blank=True, required=False)
+
+    def validate(self, attrs):
+        first_name = attrs["first_name"].strip()
+        last_name = attrs["last_name"].strip()
+        if PatientProfile.objects.filter(
+            user__first_name__iexact=first_name,
+            user__last_name__iexact=last_name,
+        ).exists():
+            raise serializers.ValidationError(
+                {"detail": "A patient with this first name and last name already exists."}
+            )
+
+        attrs["first_name"] = first_name
+        attrs["last_name"] = last_name
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        user = User.objects.create_user(
+            username=unique_patient_username(
+                validated_data["first_name"],
+                validated_data["last_name"],
+            ),
+            email=validated_data["email"],
+            password=validated_data["password"],
+            first_name=validated_data["first_name"],
+            last_name=validated_data["last_name"],
+            role=UserRole.PATIENT,
+        )
+        return PatientProfile.objects.create(
+            user=user,
+            phone=validated_data.get("phone", ""),
+            allergies=validated_data.get("allergies", ""),
+            dental_notes=validated_data.get("dental_notes", ""),
+        )
+
+
+def unique_patient_username(first_name, last_name):
+    first = username_part(first_name)
+    last = username_part(last_name)
+    base = ".".join(part for part in [first, last] if part) or "patient"
+    username = base
+    suffix = 2
+
+    while User.objects.filter(username=username).exists():
+        username = f"{base}{suffix}"
+        suffix += 1
+
+    return username
+
+
+def username_part(value):
+    return re.sub(r"[^a-z0-9]+", ".", value.lower()).strip(".")
 
 
 class FollowUpCaseSerializer(serializers.ModelSerializer):

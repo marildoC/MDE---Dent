@@ -6,10 +6,9 @@ import { evaluateReport } from '../api/decisionEngine.js'
 import { listEscalationCases, updateEscalationCase } from '../api/escalations.js'
 import {
   createFollowUpCase,
-  createPatientProfile,
+  createPatientProfileWithUser,
   listFollowUpCases,
   listPatientProfiles,
-  listPatientUsers,
 } from '../api/patients.js'
 import { listSymptomReports } from '../api/reports.js'
 import { listWorkflows } from '../api/workflows.js'
@@ -25,9 +24,11 @@ import {
 const profileInitial = {
   allergies: '',
   dental_notes: '',
-  emergency_contact: '',
+  email: '',
+  first_name: '',
+  last_name: '',
+  password: '',
   phone: '',
-  user: '',
 }
 
 const caseInitial = {
@@ -78,6 +79,43 @@ function statusOptions(currentStatus, transitions, labels) {
 
 function RiskBadge({ value }) {
   return <span className={`status-badge ${riskClass(value)}`}>{formatConstant(value)}</span>
+}
+
+function patientProfileLabel(profile) {
+  const firstName = profile?.user_detail?.first_name?.trim()
+  const lastName = profile?.user_detail?.last_name?.trim()
+  const fullName = [firstName, lastName].filter(Boolean).join(' ')
+  return fullName || profile?.user_detail?.username || 'Unknown patient'
+}
+
+function patientProfileUsername(profile) {
+  return profile?.user_detail?.username || 'Unavailable username'
+}
+
+function patientSearchText(profile) {
+  return [
+    patientProfileLabel(profile),
+    patientProfileUsername(profile),
+    profile?.user_detail?.email || '',
+  ]
+    .join(' ')
+    .toLowerCase()
+}
+
+function findDuplicatePatientProfile(profiles, firstName, lastName) {
+  const normalizedFirst = firstName.trim().toLowerCase()
+  const normalizedLast = lastName.trim().toLowerCase()
+  if (!normalizedFirst || !normalizedLast) {
+    return null
+  }
+
+  return (
+    profiles.find(
+      (profile) =>
+        profile.user_detail?.first_name?.trim().toLowerCase() === normalizedFirst &&
+        profile.user_detail?.last_name?.trim().toLowerCase() === normalizedLast,
+    ) || null
+  )
 }
 
 function buildEscalationDrafts(escalations) {
@@ -134,7 +172,6 @@ export default function FollowUpManagementPage() {
   const { logout } = useAuth()
   const [appointments, setAppointments] = useState([])
   const [appointmentDrafts, setAppointmentDrafts] = useState({})
-  const [patientUsers, setPatientUsers] = useState([])
   const [profiles, setProfiles] = useState([])
   const [cases, setCases] = useState([])
   const [escalations, setEscalations] = useState([])
@@ -147,11 +184,17 @@ export default function FollowUpManagementPage() {
   const [workflows, setWorkflows] = useState([])
   const [profileForm, setProfileForm] = useState(profileInitial)
   const [caseForm, setCaseForm] = useState(caseInitial)
+  const [patientSearch, setPatientSearch] = useState('')
+  const [isPatientSelectorOpen, setIsPatientSelectorOpen] = useState(false)
+  const [profileMessage, setProfileMessage] = useState('')
+  const [profileError, setProfileError] = useState('')
   const [error, setError] = useState('')
   const [evaluatingReportId, setEvaluatingReportId] = useState(null)
   const [generatingAdviceId, setGeneratingAdviceId] = useState(null)
   const [updatingAppointmentId, setUpdatingAppointmentId] = useState(null)
   const [updatingEscalationId, setUpdatingEscalationId] = useState(null)
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false)
+  const [isCreatingCase, setIsCreatingCase] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   const activeWorkflows = useMemo(
@@ -198,6 +241,10 @@ export default function FollowUpManagementPage() {
     [escalations],
   )
   const patientCaseGroups = useMemo(() => groupCasesByPatient(cases), [cases])
+  const duplicatePatientProfile = useMemo(
+    () => findDuplicatePatientProfile(profiles, profileForm.first_name, profileForm.last_name),
+    [profileForm.first_name, profileForm.last_name, profiles],
+  )
 
   async function fetchData() {
     const requests = {
@@ -206,7 +253,6 @@ export default function FollowUpManagementPage() {
       escalationsData: listEscalationCases(),
       profilesData: listPatientProfiles(),
       reportsData: listSymptomReports(),
-      usersData: listPatientUsers(),
       workflowsData: listWorkflows(),
     }
     const results = await Promise.allSettled(Object.entries(requests).map(([, request]) => request))
@@ -218,7 +264,6 @@ export default function FollowUpManagementPage() {
       escalationsData: [],
       profilesData: [],
       reportsData: [],
-      usersData: [],
       workflowsData: [],
     }
 
@@ -240,7 +285,6 @@ export default function FollowUpManagementPage() {
 
   async function loadData() {
     const data = await fetchData()
-    setPatientUsers(data.usersData)
     setAppointments(data.appointmentsData)
     setProfiles(data.profilesData)
     setCases(data.casesData)
@@ -265,7 +309,6 @@ export default function FollowUpManagementPage() {
           return
         }
         setAppointments(data.appointmentsData)
-        setPatientUsers(data.usersData)
         setProfiles(data.profilesData)
         setCases(data.casesData)
         setEscalations(data.escalationsData)
@@ -305,6 +348,8 @@ export default function FollowUpManagementPage() {
   }, [])
 
   const handleProfileChange = (event) => {
+    setProfileError('')
+    setProfileMessage('')
     setProfileForm((current) => ({
       ...current,
       [event.target.name]: event.target.value,
@@ -321,16 +366,26 @@ export default function FollowUpManagementPage() {
   const submitProfile = async (event) => {
     event.preventDefault()
     setError('')
+    setProfileError('')
+    setProfileMessage('')
 
+    if (duplicatePatientProfile) {
+      setProfileError('A patient with this first name and last name already exists.')
+      return
+    }
+
+    setIsCreatingProfile(true)
     try {
-      await createPatientProfile({
-        ...profileForm,
-        user: Number(profileForm.user),
-      })
+      const profile = await createPatientProfileWithUser(profileForm)
+      const createdName = patientProfileLabel(profile)
+      const username = profile.user_detail?.username || 'Unavailable'
       setProfileForm(profileInitial)
+      setProfileMessage(`Created patient ${createdName}. Login username: ${username}. Password was set.`)
       await loadData()
     } catch (err) {
-      setError(err.message)
+      setProfileError(err.message)
+    } finally {
+      setIsCreatingProfile(false)
     }
   }
 
@@ -338,6 +393,12 @@ export default function FollowUpManagementPage() {
     event.preventDefault()
     setError('')
 
+    if (!caseForm.patient) {
+      setError('Select a patient profile before creating a follow-up case.')
+      return
+    }
+
+    setIsCreatingCase(true)
     try {
       await createFollowUpCase({
         ...caseForm,
@@ -346,9 +407,12 @@ export default function FollowUpManagementPage() {
         workflow: Number(caseForm.workflow),
       })
       setCaseForm(caseInitial)
+      setPatientSearch('')
       await loadData()
     } catch (err) {
       setError(err.message)
+    } finally {
+      setIsCreatingCase(false)
     }
   }
 
@@ -495,18 +559,50 @@ export default function FollowUpManagementPage() {
           <form className="panel-form" onSubmit={submitProfile}>
             <h2>Create Patient Profile</h2>
             <p className="muted-text form-context">
-              Create a minimal patient profile before assigning an active workflow.
+              Create a patient login and profile before assigning an active workflow.
             </p>
             <label>
-              Patient user
-              <select name="user" onChange={handleProfileChange} required value={profileForm.user}>
-                <option value="">Select patient user</option>
-                {patientUsers.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.username}
-                  </option>
-                ))}
-              </select>
+              First name
+              <input
+                name="first_name"
+                onChange={handleProfileChange}
+                required
+                value={profileForm.first_name}
+              />
+            </label>
+            <label>
+              Last name
+              <input
+                name="last_name"
+                onChange={handleProfileChange}
+                required
+                value={profileForm.last_name}
+              />
+            </label>
+            {duplicatePatientProfile ? (
+              <p className="form-error compact-form-error">
+                A patient with this first name and last name already exists.
+              </p>
+            ) : null}
+            <label>
+              Email
+              <input
+                name="email"
+                onChange={handleProfileChange}
+                required
+                type="email"
+                value={profileForm.email}
+              />
+            </label>
+            <label>
+              Password
+              <input
+                name="password"
+                onChange={handleProfileChange}
+                required
+                type="password"
+                value={profileForm.password}
+              />
             </label>
             <label>
               Phone
@@ -528,17 +624,15 @@ export default function FollowUpManagementPage() {
                 value={profileForm.dental_notes}
               />
             </label>
-            <label>
-              Emergency contact
-              <input
-                name="emergency_contact"
-                onChange={handleProfileChange}
-                value={profileForm.emergency_contact}
-              />
-            </label>
-            <button className="primary-button" type="submit">
-              Create profile
+            <button
+              className="primary-button"
+              disabled={isCreatingProfile || Boolean(duplicatePatientProfile)}
+              type="submit"
+            >
+              {isCreatingProfile ? 'Creating profile...' : 'Create profile'}
             </button>
+            {profileMessage ? <p className="success-message">{profileMessage}</p> : null}
+            {profileError ? <p className="form-error compact-form-error">{profileError}</p> : null}
           </form>
 
           <form className="panel-form" onSubmit={submitCase}>
@@ -546,17 +640,28 @@ export default function FollowUpManagementPage() {
             <p className="muted-text form-context">
               Only active workflows can be assigned to patients.
             </p>
-            <label>
-              Patient profile
-              <select name="patient" onChange={handleCaseChange} required value={caseForm.patient}>
-                <option value="">Select patient profile</option>
-                {profiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.user_detail.username}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SearchablePatientSelector
+              isOpen={isPatientSelectorOpen}
+              onClearSelection={() =>
+                setCaseForm((current) => ({
+                  ...current,
+                  patient: '',
+                }))
+              }
+              onOpenChange={setIsPatientSelectorOpen}
+              onQueryChange={setPatientSearch}
+              onSelect={(profile) => {
+                setCaseForm((current) => ({
+                  ...current,
+                  patient: String(profile.id),
+                }))
+                setPatientSearch(patientProfileLabel(profile))
+                setIsPatientSelectorOpen(false)
+              }}
+              profiles={profiles}
+              query={patientSearch}
+              selectedProfileId={caseForm.patient}
+            />
             <label>
               Active workflow
               <select name="workflow" onChange={handleCaseChange} required value={caseForm.workflow}>
@@ -595,8 +700,8 @@ export default function FollowUpManagementPage() {
               Notes
               <textarea name="notes" onChange={handleCaseChange} value={caseForm.notes} />
             </label>
-            <button className="primary-button" type="submit">
-              Create follow-up case
+            <button className="primary-button" disabled={isCreatingCase} type="submit">
+              {isCreatingCase ? 'Creating case...' : 'Create follow-up case'}
             </button>
           </form>
         </div>
@@ -697,7 +802,102 @@ function groupCasesByPatient(casesData) {
 }
 
 function patientName(patientDetail) {
-  return patientDetail?.user_detail?.username || 'Unknown patient'
+  return patientProfileLabel(patientDetail)
+}
+
+function SearchablePatientSelector({
+  isOpen,
+  onClearSelection,
+  onOpenChange,
+  onQueryChange,
+  onSelect,
+  profiles,
+  query,
+  selectedProfileId,
+}) {
+  const selectedProfile = profiles.find((profile) => String(profile.id) === String(selectedProfileId))
+  const normalizedQuery = query.trim().toLowerCase()
+  const matchingProfiles = normalizedQuery
+    ? profiles.filter((profile) => patientSearchText(profile).includes(normalizedQuery))
+    : profiles
+  const visibleProfiles = matchingProfiles.slice(0, 10)
+
+  const handleInputChange = (event) => {
+    onQueryChange(event.target.value)
+    onClearSelection()
+    onOpenChange(true)
+  }
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      onOpenChange(false)
+      return
+    }
+    if (event.key === 'Enter' && isOpen && visibleProfiles.length > 0) {
+      event.preventDefault()
+      onSelect(visibleProfiles[0])
+    }
+  }
+
+  return (
+    <div
+      className="panel-field searchable-select-field"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          onOpenChange(false)
+        }
+      }}
+    >
+      <label htmlFor="follow-up-patient-search">Patient profile</label>
+      <div className="searchable-select">
+        <input
+          autoComplete="off"
+          id="follow-up-patient-search"
+          onChange={handleInputChange}
+          onFocus={() => onOpenChange(true)}
+          onKeyDown={handleKeyDown}
+          placeholder="Search patient by name or username"
+          role="combobox"
+          value={query}
+        />
+        {selectedProfile ? (
+          <small className="selected-patient-meta">
+            Selected: {patientProfileLabel(selectedProfile)} | username:{' '}
+            {patientProfileUsername(selectedProfile)}
+          </small>
+        ) : null}
+        {isOpen ? (
+          <div className="searchable-select-menu" role="listbox">
+            {visibleProfiles.length === 0 ? (
+              <p className="muted-text">No matching patient profiles.</p>
+            ) : (
+              <>
+                {visibleProfiles.map((profile) => (
+                  <button
+                    className={`searchable-select-option${
+                      String(profile.id) === String(selectedProfileId) ? ' is-selected' : ''
+                    }`}
+                    key={profile.id}
+                    onClick={() => onSelect(profile)}
+                    role="option"
+                    type="button"
+                  >
+                    <span>{patientProfileLabel(profile)}</span>
+                    <small>username: {patientProfileUsername(profile)}</small>
+                  </button>
+                ))}
+                {matchingProfiles.length > visibleProfiles.length ? (
+                  <small className="muted-text">
+                    Showing first {visibleProfiles.length} of {matchingProfiles.length} matches.
+                  </small>
+                ) : null}
+              </>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 function latestReport(reports) {

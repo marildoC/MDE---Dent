@@ -55,6 +55,115 @@ class PatientFollowUpRuntimeTests(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(PatientProfile.objects.count(), 1)
 
+    def test_admin_can_create_patient_profile_with_new_user(self):
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.post(
+            "/api/patients/profiles/create-with-user/",
+            {
+                "first_name": "Marildo",
+                "last_name": "Cani",
+                "email": "marildo@example.com",
+                "password": "testpass123",
+                "phone": "123",
+                "allergies": "None",
+                "dental_notes": "Post-extraction follow-up.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["user_detail"]["username"], "marildo.cani")
+        self.assertEqual(response.data["user_detail"]["role"], UserRole.PATIENT)
+        self.assertEqual(response.data["phone"], "123")
+        user = User.objects.get(username="marildo.cani")
+        self.assertTrue(user.check_password("testpass123"))
+        self.assertEqual(user.role, UserRole.PATIENT)
+        self.assertEqual(PatientProfile.objects.get(user=user).allergies, "None")
+
+    def test_dentist_can_create_patient_profile_with_new_user(self):
+        self.client.force_authenticate(self.dentist)
+
+        response = self.client.post(
+            "/api/patients/profiles/create-with-user/",
+            {
+                "first_name": "Mira",
+                "last_name": "Patient",
+                "email": "mira@example.com",
+                "password": "testpass123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(User.objects.get(username="mira.patient").role, UserRole.PATIENT)
+
+    def test_patient_cannot_create_patient_profile_with_new_user(self):
+        self.client.force_authenticate(self.patient_user)
+
+        response = self.client.post(
+            "/api/patients/profiles/create-with-user/",
+            {
+                "first_name": "Blocked",
+                "last_name": "Patient",
+                "email": "blocked@example.com",
+                "password": "testpass123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(User.objects.filter(username="blocked.patient").exists())
+
+    def test_create_patient_profile_with_new_user_rejects_duplicate_name(self):
+        existing_user = User.objects.create_user(
+            username="existing.patient",
+            password="testpass123",
+            first_name="Marildo",
+            last_name="Cani",
+            role=UserRole.PATIENT,
+        )
+        PatientProfile.objects.create(user=existing_user)
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.post(
+            "/api/patients/profiles/create-with-user/",
+            {
+                "first_name": "marildo",
+                "last_name": "cani",
+                "email": "duplicate@example.com",
+                "password": "testpass123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("already exists", str(response.data["detail"]))
+        self.assertFalse(User.objects.filter(email="duplicate@example.com").exists())
+        self.assertEqual(PatientProfile.objects.count(), 1)
+
+    def test_create_patient_profile_generates_unique_username(self):
+        User.objects.create_user(
+            username="marildo.cani",
+            password="testpass123",
+            role=UserRole.PATIENT,
+        )
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.post(
+            "/api/patients/profiles/create-with-user/",
+            {
+                "first_name": "Marildo",
+                "last_name": "Cani",
+                "email": "marildo2@example.com",
+                "password": "testpass123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["user_detail"]["username"], "marildo.cani2")
+
     def test_profile_cannot_be_created_for_dentist_user(self):
         self.client.force_authenticate(self.admin)
 

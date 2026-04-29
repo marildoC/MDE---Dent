@@ -61,55 +61,67 @@ function DashboardLayout({ variant }) {
         </button>
       </header>
 
-      <section className="dashboard-panel">
-        <div>
-          <p className="eyebrow">{copy.eyebrow}</p>
-          <h2>{copy.body}</h2>
-          {variant === 'admin' ? (
-            <DemoPathSummary />
-          ) : null}
-          {variant === 'admin' ? (
-            <div className="button-row dashboard-actions">
-              <Link className="primary-link" to="/admin/workflows">
-                Workflow management
-              </Link>
-              <Link className="secondary-link" to="/follow-up-cases">
+      {variant === 'admin' ? (
+        <section className="dashboard-panel admin-dashboard-panel">
+          <div className="admin-dashboard-intro">
+            <p className="eyebrow">Operational controls</p>
+            <h2>Manage the implemented DentCare-MDE follow-up system.</h2>
+            <p className="muted-text">Signed in as {user.username}</p>
+          </div>
+          <div className="admin-action-grid">
+            <AdminActionCard
+              body="Create, validate, activate, and archive dental workflows."
+              label="Workflow Management"
+              to="/admin/workflows"
+            />
+            <AdminActionCard
+              body="Create patient profiles, assign workflows, and review reports, escalations, and appointments."
+              label="Follow-Up Cases"
+              to="/follow-up-cases"
+            />
+            <AdminActionCard
+              body="Ask read-only operational questions about clinic data."
+              label="Admin Intelligence"
+              to="/admin-intelligence"
+            />
+          </div>
+        </section>
+      ) : (
+        <section className="dashboard-panel">
+          <div>
+            <p className="eyebrow">{copy.eyebrow}</p>
+            <h2>{copy.body}</h2>
+            {variant === 'staff' ? (
+              <Link className="primary-link" to="/follow-up-cases">
                 Follow-up cases
               </Link>
-              <Link className="secondary-link" to="/admin-intelligence">
-                Admin Intelligence
-              </Link>
+            ) : null}
+          </div>
+          <dl className="identity-list">
+            <div>
+              <dt>User</dt>
+              <dd>{user.username}</dd>
             </div>
-          ) : null}
-          {variant === 'staff' ? (
-            <Link className="primary-link" to="/follow-up-cases">
-              Follow-up cases
-            </Link>
-          ) : null}
-        </div>
-        <dl className="identity-list">
-          <div>
-            <dt>User</dt>
-            <dd>{user.username}</dd>
-          </div>
-          <div>
-            <dt>Role</dt>
-            <dd>{user.role}</dd>
-          </div>
-        </dl>
-      </section>
+            <div>
+              <dt>Role</dt>
+              <dd>{user.role}</dd>
+            </div>
+          </dl>
+        </section>
+      )}
     </main>
   )
 }
 
-function DemoPathSummary() {
+function AdminActionCard({ body, label, to }) {
   return (
-    <ol className="demo-path-list">
-      <li>Verify an active Post-Extraction workflow.</li>
-      <li>Create or review the patient follow-up case.</li>
-      <li>Use patient reporting to trigger assessment, advice, escalation, and appointment flow.</li>
-      <li>Ask Admin Intelligence for audit traceability.</li>
-    </ol>
+    <Link className="admin-action-card" to={to}>
+      <span>
+        <strong>{label}</strong>
+        <small>{body}</small>
+      </span>
+      <span className="admin-action-arrow">Open</span>
+    </Link>
   )
 }
 

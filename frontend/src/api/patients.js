@@ -42,6 +42,10 @@ export function createPatientProfile(payload) {
   return createResource('/patients/profiles/', payload)
 }
 
+export function createPatientProfileWithUser(payload) {
+  return createResource('/patients/profiles/create-with-user/', payload)
+}
+
 export function listFollowUpCases() {
   return api('/patients/follow-up-cases/')
 }

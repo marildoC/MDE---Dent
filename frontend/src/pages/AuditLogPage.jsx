@@ -151,15 +151,6 @@ export default function AuditLogPage() {
       </header>
 
       <section className="dashboard-panel admin-intelligence-panel">
-        <div className="admin-intelligence-intro">
-          <p className="eyebrow">Read-only operational assistant</p>
-          <h2>Ask operational questions about DentCare-MDE data.</h2>
-          <p className="muted-text">
-            Ask operational questions about patients, follow-up cases, reports, escalations,
-            appointments, workflows, and audit history.
-          </p>
-        </div>
-
         <div className="chat-history">
           {messages.length === 0 ? (
             <div className="empty-chat-state">
