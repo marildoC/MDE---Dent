@@ -90,6 +90,14 @@ function App() {
               }
             />
             <Route
+              path="/admin-intelligence"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN']}>
+                  <AuditLogPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/follow-up-cases"
               element={
                 <ProtectedRoute allowedRoles={['DENTIST', 'ADMIN']}>

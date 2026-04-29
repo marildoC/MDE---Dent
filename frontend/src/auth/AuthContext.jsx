@@ -21,6 +21,9 @@ export function AuthProvider({ children }) {
   const clearSession = useCallback(() => {
     localStorage.removeItem(ACCESS_TOKEN_KEY)
     localStorage.removeItem(REFRESH_TOKEN_KEY)
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith('dentcare_admin_intelligence_'))
+      .forEach((key) => localStorage.removeItem(key))
     setUser(null)
   }, [])
 

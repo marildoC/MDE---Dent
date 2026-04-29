@@ -30,6 +30,7 @@ urlpatterns = [
     path('api/escalations/', include('escalations.urls')),
     path('api/appointments/', include('appointments.urls')),
     path('api/audit/', include('audit.urls')),
+    path('api/admin-intelligence/', include('admin_intelligence.urls')),
 ]
 
 if settings.DEBUG:

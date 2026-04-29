@@ -544,6 +544,249 @@
   margin-top: 0;
 }
 
+.admin-intelligence-topbar {
+  max-width: 1120px;
+}
+
+.admin-intelligence-topbar h1 {
+  margin-bottom: 6px;
+}
+
+.admin-intelligence-panel {
+  display: block;
+  max-width: 1120px;
+}
+
+.admin-intelligence-intro {
+  border-bottom: 1px solid #e3ebe8;
+  padding-bottom: 18px;
+}
+
+.admin-intelligence-intro h2 {
+  margin-bottom: 8px;
+}
+
+.intelligence-query-box {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.intelligence-query-box label {
+  display: grid;
+  gap: 8px;
+  color: #293b37;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.intelligence-query-box textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #bfcec9;
+  border-radius: 8px;
+  color: #182622;
+  font: inherit;
+  min-height: 104px;
+  padding: 14px;
+  resize: vertical;
+}
+
+.intelligence-query-box textarea:focus {
+  border-color: #237464;
+  outline: 3px solid rgba(35, 116, 100, 0.18);
+}
+
+.intelligence-query-box .primary-button {
+  justify-self: end;
+}
+
+.suggestion-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.suggestion-chip {
+  border: 1px solid #cfe0db;
+  border-radius: 999px;
+  background: #f4faf8;
+  color: #1d4f46;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 11px;
+}
+
+.suggestion-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.chat-history {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.empty-chat-state {
+  border: 1px dashed #cfe0db;
+  border-radius: 8px;
+  background: #fbfdfc;
+  padding: 18px;
+}
+
+.empty-chat-state h3 {
+  margin: 0 0 6px;
+}
+
+.chat-message {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #e3ebe8;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.user-message {
+  background: #e8f1ee;
+  margin-left: min(12%, 96px);
+}
+
+.assistant-message {
+  background: #ffffff;
+  margin-right: min(12%, 96px);
+}
+
+.message-author {
+  color: #1d4f46;
+  font-size: 13px;
+  font-weight: 800;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.chat-message p {
+  margin: 0;
+}
+
+.structured-answer {
+  display: grid;
+  gap: 12px;
+}
+
+.answer-table-wrap {
+  overflow-x: auto;
+}
+
+.answer-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.answer-table th,
+.answer-table td {
+  border-bottom: 1px solid #e3ebe8;
+  padding: 10px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.answer-table th {
+  color: #40524e;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.answer-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.answer-card {
+  border: 1px solid #e3ebe8;
+  border-radius: 8px;
+  background: #fbfdfc;
+  padding: 14px;
+}
+
+.answer-card h3 {
+  margin: 0 0 10px;
+}
+
+.answer-card dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.answer-card dl div {
+  display: grid;
+  gap: 2px;
+}
+
+.answer-card dt {
+  color: #607872;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.answer-card dd {
+  margin: 0;
+}
+
+.answer-timeline {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.answer-timeline li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.timeline-marker {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #1d6f60;
+  margin-top: 6px;
+}
+
+.answer-timeline strong,
+.answer-timeline small {
+  display: block;
+}
+
+.answer-timeline small {
+  color: #607872;
+  margin-top: 3px;
+}
+
+.evidence-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.evidence-list span {
+  border-radius: 999px;
+  background: #edf2f7;
+  color: #344054;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 8px;
+}
+
 .report-form,
 .report-history {
   border-top: 1px solid #e3ebe8;
@@ -938,6 +1181,7 @@
   .dashboard-panel,
   .split-layout,
   .workflow-grid,
+  .answer-card-grid,
   .inline-fields,
   .report-detail-grid {
     grid-template-columns: 1fr;
@@ -950,5 +1194,11 @@
 
   .case-switcher {
     justify-items: start;
+  }
+
+  .user-message,
+  .assistant-message {
+    margin-left: 0;
+    margin-right: 0;
   }
 }

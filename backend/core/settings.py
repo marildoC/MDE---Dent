@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'escalations',
     'appointments',
     'audit',
+    'admin_intelligence',
 ]
 
 AUTH_USER_MODEL = "accounts.User"

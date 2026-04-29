@@ -76,8 +76,8 @@ function DashboardLayout({ variant }) {
               <Link className="secondary-link" to="/follow-up-cases">
                 Follow-up cases
               </Link>
-              <Link className="secondary-link" to="/admin/audit">
-                Audit logs
+              <Link className="secondary-link" to="/admin-intelligence">
+                Admin Intelligence
               </Link>
             </div>
           ) : null}
@@ -108,7 +108,7 @@ function DemoPathSummary() {
       <li>Verify an active Post-Extraction workflow.</li>
       <li>Create or review the patient follow-up case.</li>
       <li>Use patient reporting to trigger assessment, advice, escalation, and appointment flow.</li>
-      <li>Confirm traceability in audit logs.</li>
+      <li>Ask Admin Intelligence for audit traceability.</li>
     </ol>
   )
 }
