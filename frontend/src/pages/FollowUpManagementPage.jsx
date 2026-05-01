@@ -81,6 +81,14 @@ function RiskBadge({ value }) {
   return <span className={`status-badge ${riskClass(value)}`}>{formatConstant(value)}</span>
 }
 
+function namedUser(user) {
+  if (!user) {
+    return 'Unassigned'
+  }
+  const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim()
+  return fullName || user.username || 'Unavailable'
+}
+
 function patientProfileLabel(profile) {
   const firstName = profile?.user_detail?.first_name?.trim()
   const lastName = profile?.user_detail?.last_name?.trim()
@@ -1060,15 +1068,10 @@ function CaseReportList({
   }
 
   return (
-    <span className="nested-report-list">
+    <div className="nested-report-list">
       {reports.map((report) => (
-        <span className="report-summary-item" key={report.id}>
-          <small>
-            Report day {report.day_after_treatment}: pain {report.pain_level}/10, swelling{' '}
-            {formatConstant(report.swelling)}, bleeding {formatConstant(report.bleeding)}, fever{' '}
-            {formatBoolean(report.fever)}, bad smell/taste {formatBoolean(report.bad_smell)}
-          </small>
-          <RiskAssessmentSummary
+        <div className="report-summary-item" key={report.id}>
+          <RuntimeReviewPanel
             assessment={report.risk_assessment}
             appointment={
               escalationByReport[report.id]
@@ -1080,25 +1083,157 @@ function CaseReportList({
             generatingAdvice={generatingAdviceId === report.risk_assessment?.id}
             onEvaluate={() => onEvaluate(report.id)}
             onGenerateAdvice={() => onGenerateAdvice(report.risk_assessment.id)}
+            report={report}
           />
-        </span>
+        </div>
       ))}
-    </span>
+    </div>
   )
 }
 
-function RiskAssessmentSummary({
+function RuntimeReviewPanel({
   assessment,
   appointment,
+  appointmentControls = null,
+  advice,
   escalation,
   evaluating,
   generatingAdvice,
   onEvaluate,
   onGenerateAdvice,
+  report,
+  staffReviewControls = null,
 }) {
+  const guidance = advice || assessment?.advice_message
+  const [isTraceOpen, setIsTraceOpen] = useState(true)
+
+  return (
+    <div className="runtime-review-panel">
+      <RuntimeSection title="Report Input">
+        <ReportInputDetails report={report} />
+      </RuntimeSection>
+
+      <RuntimeSection title="Decision Result">
+        <DecisionResultDetails
+          assessment={assessment}
+          evaluating={evaluating}
+          onEvaluate={onEvaluate}
+        />
+      </RuntimeSection>
+
+      <RuntimeSection title="Patient Guidance">
+        <AdviceSummary
+          advice={guidance}
+          generating={generatingAdvice}
+          onGenerate={assessment ? onGenerateAdvice : null}
+        />
+      </RuntimeSection>
+
+      <RuntimeSection title="Staff Review">
+        <StaffReviewDetails escalation={escalation} />
+        {staffReviewControls}
+      </RuntimeSection>
+
+      <RuntimeSection title="Appointment">
+        <AppointmentDetails appointment={appointment} />
+        {appointmentControls}
+      </RuntimeSection>
+
+      <RuntimeSection
+        action={
+          <button
+            className="inline-action-button"
+            onClick={() => setIsTraceOpen((current) => !current)}
+            type="button"
+          >
+            {isTraceOpen ? 'Hide trace' : 'Show trace'}
+          </button>
+        }
+        title="Model Execution Trace"
+      >
+        {isTraceOpen ? (
+          <ModelExecutionTrace
+            advice={guidance}
+            appointment={appointment}
+            assessment={assessment}
+            escalation={escalation}
+            report={report}
+          />
+        ) : (
+          <small className="muted-text">Trace hidden.</small>
+        )}
+      </RuntimeSection>
+    </div>
+  )
+}
+
+function RuntimeSection({ action = null, children, title }) {
+  return (
+    <div className="runtime-section">
+      <div className="runtime-section-heading">
+        <strong>{title}</strong>
+        {action}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function ReportInputDetails({ report }) {
+  if (!report) {
+    return <small>Report input is not available.</small>
+  }
+
+  return (
+    <dl className="runtime-detail-grid">
+      <div>
+        <dt>Report day</dt>
+        <dd>{report.day_after_treatment ?? 'Unavailable'}</dd>
+      </div>
+      <div>
+        <dt>Pain level</dt>
+        <dd>{report.pain_level ?? 'Unavailable'}/10</dd>
+      </div>
+      <div>
+        <dt>Swelling</dt>
+        <dd>{formatConstant(report.swelling)}</dd>
+      </div>
+      <div>
+        <dt>Bleeding</dt>
+        <dd>{formatConstant(report.bleeding)}</dd>
+      </div>
+      <div>
+        <dt>Fever</dt>
+        <dd>{formatBoolean(report.fever)}</dd>
+      </div>
+      <div>
+        <dt>Bad smell/taste</dt>
+        <dd>{formatBoolean(report.bad_smell)}</dd>
+      </div>
+      {report.notes ? (
+        <div className="runtime-detail-wide">
+          <dt>Notes</dt>
+          <dd>{report.notes}</dd>
+        </div>
+      ) : null}
+      {report.image ? (
+        <div className="runtime-detail-wide">
+          <dt>Image evidence</dt>
+          <dd>
+            <a href={report.image} rel="noreferrer" target="_blank">
+              Open evidence
+            </a>
+          </dd>
+        </div>
+      ) : null}
+    </dl>
+  )
+}
+
+function DecisionResultDetails({ assessment, evaluating, onEvaluate }) {
   if (!assessment) {
     return (
-      <span className="assessment-summary">
+      <div className="runtime-empty-state">
         <small>No risk assessment yet.</small>
         <button
           className="secondary-button compact-button"
@@ -1108,27 +1243,38 @@ function RiskAssessmentSummary({
         >
           {evaluating ? 'Evaluating...' : 'Evaluate'}
         </button>
-      </span>
+      </div>
     )
   }
 
   return (
-    <span className="assessment-summary">
-      <small>
-        Risk assessment: <RiskBadge value={assessment.risk_level} /> Recommended action:{' '}
-        {formatConstant(assessment.recommended_action)} | Appointment priority:{' '}
-        {formatConstant(assessment.appointment_priority)}
-      </small>
-      <small>Detected stage: {assessment.detected_stage_name || 'Unavailable'}</small>
-      <small>Explanation: {assessment.explanation}</small>
-      <AdviceSummary
-        advice={assessment.advice_message}
-        generating={generatingAdvice}
-        onGenerate={onGenerateAdvice}
-      />
-      <EscalationSummary appointment={appointment} escalation={escalation} />
+    <div className="decision-result">
+      <dl className="runtime-detail-grid">
+        <div>
+          <dt>Risk</dt>
+          <dd>
+            <RiskBadge value={assessment.risk_level} />
+          </dd>
+        </div>
+        <div>
+          <dt>Recommended action</dt>
+          <dd>{formatConstant(assessment.recommended_action)}</dd>
+        </div>
+        <div>
+          <dt>Appointment priority</dt>
+          <dd>{formatConstant(assessment.appointment_priority)}</dd>
+        </div>
+        <div>
+          <dt>Detected stage</dt>
+          <dd>{assessment.detected_stage_name || 'Unavailable'}</dd>
+        </div>
+        <div className="runtime-detail-wide">
+          <dt>Explanation</dt>
+          <dd>{assessment.explanation}</dd>
+        </div>
+      </dl>
       <MatchedRulesSummary assessment={assessment} />
-    </span>
+    </div>
   )
 }
 
@@ -1142,44 +1288,149 @@ function MatchedRulesSummary({ assessment }) {
   }
 
   return (
-    <span className="matched-rule-list">
+    <div className="matched-rule-list">
       {matchedRules.map((rule, index) => (
-        <small key={rule.id || `${rule.name}-${index}`}>
-          Matched rule: {rule.name}
-          {rule.condition_text ? <> | Condition: {rule.condition_text}</> : null}
-        </small>
+        <small key={rule.id || `${rule.name}-${index}`}>Matched rule: {rule.name}</small>
       ))}
-    </span>
+    </div>
   )
 }
 
-function EscalationSummary({ appointment, escalation }) {
+function StaffReviewDetails({ escalation }) {
   if (!escalation) {
-    return null
+    return <small>No staff escalation linked to this report.</small>
   }
 
   return (
-    <span className="escalation-summary">
-      <small className="escalation-label">Staff review</small>
-      <small>
-        Status: {formatConstant(escalation.status)} | Urgency: {formatConstant(escalation.urgency)}
-      </small>
-      {escalation.staff_response ? <small>Response: {escalation.staff_response}</small> : null}
-      {appointment ? <AppointmentSummary appointment={appointment} /> : null}
-    </span>
+    <dl className="runtime-detail-grid">
+      <div>
+        <dt>Status</dt>
+        <dd>{formatConstant(escalation.status)}</dd>
+      </div>
+      <div>
+        <dt>Urgency</dt>
+        <dd>{formatConstant(escalation.urgency)}</dd>
+      </div>
+      <div>
+        <dt>Assigned staff</dt>
+        <dd>{namedUser(escalation.assigned_staff_detail)}</dd>
+      </div>
+      {escalation.staff_response ? (
+        <div className="runtime-detail-wide">
+          <dt>Staff response</dt>
+          <dd>{escalation.staff_response}</dd>
+        </div>
+      ) : null}
+    </dl>
   )
 }
 
-function AppointmentSummary({ appointment }) {
+function AppointmentDetails({ appointment }) {
+  if (!appointment) {
+    return <small>No appointment linked to this report.</small>
+  }
+
   return (
-    <span className="appointment-summary">
-      <small className="appointment-label">Appointment</small>
-      <small>
-        Priority: {formatConstant(appointment.priority)} | Status: {formatConstant(appointment.status)}
-      </small>
-      {appointment.scheduled_at ? <small>Scheduled: {formatDateTime(appointment.scheduled_at)}</small> : null}
-      {appointment.notes ? <small>Notes: {appointment.notes}</small> : null}
-    </span>
+    <dl className="runtime-detail-grid">
+      <div>
+        <dt>Priority</dt>
+        <dd>{formatConstant(appointment.priority)}</dd>
+      </div>
+      <div>
+        <dt>Status</dt>
+        <dd>{formatConstant(appointment.status)}</dd>
+      </div>
+      <div>
+        <dt>Scheduled</dt>
+        <dd>{appointment.scheduled_at ? formatDateTime(appointment.scheduled_at) : 'Not scheduled'}</dd>
+      </div>
+      {appointment.notes ? (
+        <div className="runtime-detail-wide">
+          <dt>Notes</dt>
+          <dd>{appointment.notes}</dd>
+        </div>
+      ) : null}
+    </dl>
+  )
+}
+
+function ModelExecutionTrace({ advice, appointment, assessment, escalation, report }) {
+  const workflow = report?.follow_up_case_detail?.workflow_detail
+  const matchedRules = assessment?.matched_rule_details?.length
+    ? assessment.matched_rule_details
+    : assessment?.matched_rules || []
+  const firstRule = matchedRules[0]
+  const reportValues = report
+    ? `day=${report.day_after_treatment}, pain=${report.pain_level}, swelling=${formatConstant(
+        report.swelling,
+      )}, bleeding=${formatConstant(report.bleeding)}, fever=${formatBoolean(
+        report.fever,
+      )}, bad_smell=${formatBoolean(report.bad_smell)}`
+    : 'Not available'
+
+  return (
+    <dl className="runtime-detail-grid">
+      <div>
+        <dt>Source workflow</dt>
+        <dd>{workflow?.name || 'Not available'}</dd>
+      </div>
+      <div>
+        <dt>Treatment type</dt>
+        <dd>{formatConstant(workflow?.treatment_type)}</dd>
+      </div>
+      <div>
+        <dt>Detected care stage</dt>
+        <dd>{assessment?.detected_stage_name || 'Not available'}</dd>
+      </div>
+      <div>
+        <dt>Symptom report</dt>
+        <dd>{report?.id ? `#${report.id}` : 'Not available'}</dd>
+      </div>
+      <div className="runtime-detail-wide">
+        <dt>Input instance</dt>
+        <dd>{reportValues}</dd>
+      </div>
+      <div>
+        <dt>Matched rule</dt>
+        <dd>{firstRule?.name || 'No symptom rule matched for this stage'}</dd>
+      </div>
+      <div className="runtime-detail-wide">
+        <dt>Condition</dt>
+        <dd>{firstRule?.condition_text || 'Not available'}</dd>
+      </div>
+      <div>
+        <dt>Selected risk</dt>
+        <dd>{formatConstant(assessment?.risk_level)}</dd>
+      </div>
+      <div>
+        <dt>Selected action</dt>
+        <dd>{formatConstant(assessment?.recommended_action)}</dd>
+      </div>
+      <div>
+        <dt>Appointment priority</dt>
+        <dd>{formatConstant(assessment?.appointment_priority)}</dd>
+      </div>
+      <div>
+        <dt>RiskAssessment</dt>
+        <dd>{assessment?.id ? `#${assessment.id}` : 'Not generated'}</dd>
+      </div>
+      <div>
+        <dt>AdviceMessage</dt>
+        <dd>{advice?.id ? `#${advice.id}` : advice ? 'present' : 'Not generated'}</dd>
+      </div>
+      <div>
+        <dt>EscalationCase</dt>
+        <dd>{escalation?.id ? `#${escalation.id}` : 'Not linked'}</dd>
+      </div>
+      <div>
+        <dt>Appointment</dt>
+        <dd>{appointment?.id ? `#${appointment.id}` : 'Not linked'}</dd>
+      </div>
+      <div>
+        <dt>Audit trace</dt>
+        <dd>{assessment ? 'Recorded' : 'Not generated'}</dd>
+      </div>
+    </dl>
   )
 }
 
@@ -1321,41 +1572,10 @@ function EscalationReviewCard({
 
       {isExpanded ? (
         <div className="accordion-body escalation-detail-body">
-          <div className="escalation-detail-summary">
-            <small>
-              Report details: bleeding {formatConstant(report.bleeding)}, bad smell/taste{' '}
-              {formatBoolean(report.bad_smell)}
-            </small>
-            <small>
-              Risk action: {formatConstant(escalation.risk_assessment_detail?.recommended_action)}
-            </small>
-            {escalation.risk_assessment_detail ? (
-              <MatchedRulesSummary assessment={escalation.risk_assessment_detail} />
-            ) : null}
-            {escalation.staff_response ? (
-              <small>Current response: {escalation.staff_response}</small>
-            ) : (
-              <small>No staff response recorded yet.</small>
-            )}
-            {escalation.advice_message ? (
-              <small>Bounded advice: {escalation.advice_message.message}</small>
-            ) : null}
-            {appointment ? <AppointmentSummary appointment={appointment} /> : null}
-          </div>
-
-          <div className="button-row review-actions">
-            <button
-              className="secondary-button compact-button"
-              disabled={isClosed}
-              onClick={onToggleEdit}
-              type="button"
-            >
-              {isEditing ? 'Close editor' : 'Edit review'}
-            </button>
-          </div>
-
-          {isEditing ? (
-            <>
+          <RuntimeReviewPanel
+            advice={escalation.advice_message}
+            appointment={appointment}
+            appointmentControls={
               <AppointmentControls
                 appointment={appointment}
                 draft={appointmentDraft}
@@ -1367,44 +1587,66 @@ function EscalationReviewCard({
                 onDraftChange={onAppointmentDraftChange}
                 onSave={onAppointmentSave}
               />
-              <div className="escalation-controls">
-                <label>
-                  Status
-                  <select
-                    disabled={isClosed}
-                    onChange={(event) => onDraftChange(escalation.id, 'status', event.target.value)}
-                    value={draft.status || escalation.status}
-                  >
-                    {escalationOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Staff response
-                  <textarea
-                    disabled={isClosed}
-                    onChange={(event) =>
-                      onDraftChange(escalation.id, 'staff_response', event.target.value)
-                    }
-                    value={draft.staff_response || ''}
-                  />
-                </label>
+            }
+            assessment={escalation.risk_assessment_detail}
+            escalation={escalation}
+            report={report}
+            staffReviewControls={
+              <div className="staff-review-controls">
                 <div className="button-row review-actions">
                   <button
-                    className="primary-button compact-button"
-                    disabled={isSaving || isClosed}
-                    onClick={() => onUpdate(escalation.id)}
+                    className="secondary-button compact-button"
+                    disabled={isClosed}
+                    onClick={onToggleEdit}
                     type="button"
                   >
-                    {isSaving ? 'Saving...' : 'Save review'}
+                    {isEditing ? 'Close editor' : 'Edit review'}
                   </button>
                 </div>
+
+                {isEditing ? (
+                  <div className="escalation-controls">
+                    <label>
+                      Status
+                      <select
+                        disabled={isClosed}
+                        onChange={(event) =>
+                          onDraftChange(escalation.id, 'status', event.target.value)
+                        }
+                        value={draft.status || escalation.status}
+                      >
+                        {escalationOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Staff response
+                      <textarea
+                        disabled={isClosed}
+                        onChange={(event) =>
+                          onDraftChange(escalation.id, 'staff_response', event.target.value)
+                        }
+                        value={draft.staff_response || ''}
+                      />
+                    </label>
+                    <div className="button-row review-actions">
+                      <button
+                        className="primary-button compact-button"
+                        disabled={isSaving || isClosed}
+                        onClick={() => onUpdate(escalation.id)}
+                        type="button"
+                      >
+                        {isSaving ? 'Saving...' : 'Save review'}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
-            </>
-          ) : null}
+            }
+          />
         </div>
       ) : null}
     </li>
@@ -1423,7 +1665,6 @@ function AppointmentControls({ appointment, draft, escalation, isSaving, onDraft
       <small className="appointment-label">
         {appointment ? 'Appointment' : 'Create appointment'}
       </small>
-      {appointment ? <AppointmentSummary appointment={appointment} /> : null}
       <div className="inline-fields">
         <label>
           Priority
@@ -1490,7 +1731,6 @@ function AdviceSummary({ advice, generating, onGenerate }) {
   if (advice) {
     return (
       <span className="advice-summary">
-        <small className="advice-label">Patient guidance</small>
         <small>{advice.message}</small>
       </span>
     )
@@ -1499,14 +1739,16 @@ function AdviceSummary({ advice, generating, onGenerate }) {
   return (
     <span className="advice-summary">
       <small>No bounded advice yet.</small>
-      <button
-        className="secondary-button compact-button"
-        disabled={generating}
-        onClick={onGenerate}
-        type="button"
-      >
-        {generating ? 'Generating...' : 'Generate advice'}
-      </button>
+      {onGenerate ? (
+        <button
+          className="secondary-button compact-button"
+          disabled={generating}
+          onClick={onGenerate}
+          type="button"
+        >
+          {generating ? 'Generating...' : 'Generate advice'}
+        </button>
+      ) : null}
     </span>
   )
 }

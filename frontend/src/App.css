@@ -1367,7 +1367,7 @@
 
 .nested-report-list {
   display: grid;
-  gap: 3px;
+  gap: 12px;
   margin-top: 8px;
 }
 
@@ -1375,6 +1375,77 @@
 .assessment-summary {
   display: grid;
   gap: 4px;
+}
+
+.runtime-review-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dbe6e2;
+  border-radius: 8px;
+  background: #fbfdfc;
+  padding: 14px;
+}
+
+.runtime-section {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #e3ebe8;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.runtime-section-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.runtime-section-heading > strong {
+  color: #1d4f46;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.runtime-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.runtime-detail-grid div {
+  min-width: 0;
+  border: 1px solid #eef3f1;
+  border-radius: 6px;
+  background: #fbfdfc;
+  padding: 9px;
+}
+
+.runtime-detail-grid .runtime-detail-wide {
+  grid-column: 1 / -1;
+}
+
+.runtime-detail-grid dt {
+  color: #607872;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.runtime-detail-grid dd {
+  color: #14231f;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.runtime-empty-state,
+.decision-result,
+.staff-review-controls {
+  display: grid;
+  gap: 8px;
 }
 
 .assessment-summary {
@@ -1386,9 +1457,7 @@
 .advice-summary {
   display: grid;
   gap: 4px;
-  border-left: 3px solid #1d6f60;
-  margin-top: 8px;
-  padding: 8px 0 8px 10px;
+  margin: 0;
 }
 
 .advice-label {
@@ -1650,6 +1719,7 @@
   .answer-card-grid,
   .admin-action-grid,
   .inline-fields,
+  .runtime-detail-grid,
   .report-detail-grid {
     grid-template-columns: 1fr;
   }
