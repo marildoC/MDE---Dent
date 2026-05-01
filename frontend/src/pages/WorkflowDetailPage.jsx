@@ -55,6 +55,20 @@ const emptyEscalation = {
   message: '',
 }
 
+const executionSteps = [
+  'Once active, this workflow can be assigned to a patient as a follow-up case with a treatment date.',
+  'When the patient submits a report, the system derives the day after treatment.',
+  'The system detects the care stage whose day range contains that report day.',
+  'Only rules belonging to the detected care stage are considered.',
+  'Rule conditions are evaluated from structured JSON using controlled operators.',
+  'If multiple rules match, the highest risk level is selected.',
+  'A RiskAssessment is persisted with detected stage, matched rules, risk, recommended action, appointment priority, and explanation.',
+  'Bounded advice is generated from the selected risk/action and the workflow AI advice boundaries.',
+  'HIGH/URGENT results create staff escalation according to escalation rules.',
+  'Appointment handling can then use the risk/escalation context.',
+  'Audit records preserve traceability.',
+]
+
 function csvToList(value) {
   return value
     .split(',')
@@ -390,8 +404,6 @@ export default function WorkflowDetailPage() {
           </form>
         </Section>
 
-        <StaticSemanticsPanel result={validationResult} workflowStatus={workflow.status} />
-
         <Section title="Care Stages">
           {isActive ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitStage}>
@@ -684,6 +696,17 @@ export default function WorkflowDetailPage() {
             }
           />
         </Section>
+
+        <StaticSemanticsPanel result={validationResult} workflowStatus={workflow.status} />
+
+        <ExecutionSemanticsPanel
+          boundaries={boundaries}
+          escalations={escalations}
+          rules={rules}
+          stages={stages}
+          symptoms={symptoms}
+          workflow={workflow}
+        />
       </div>
     </main>
   )
@@ -735,6 +758,46 @@ function semanticCheckMarker(status) {
     return 'WARN'
   }
   return 'FAIL'
+}
+
+function ExecutionSemanticsPanel({ boundaries, escalations, rules, stages, symptoms, workflow }) {
+  const facts = [
+    { label: 'Workflow status', value: formatConstant(workflow.status) },
+    { label: 'Care stages', value: stages.length },
+    { label: 'Symptom definitions', value: symptoms.length },
+    { label: 'Symptom rules', value: rules.length },
+    { label: 'Advice boundaries', value: boundaries.length },
+    { label: 'Escalation rules', value: escalations.length },
+  ]
+
+  return (
+    <section className="section-panel execution-panel">
+      <div>
+        <p className="eyebrow">Workflow DSL Studio</p>
+        <h2>Execution Semantics</h2>
+        <p className="muted-text">
+          Shows how this workflow model is interpreted when a patient submits a symptom report.
+        </p>
+      </div>
+
+      <dl className="execution-facts">
+        {facts.map((fact) => (
+          <div key={fact.label}>
+            <dt>{fact.label}</dt>
+            <dd>{fact.value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <ol className="execution-step-list">
+        {executionSteps.map((step) => (
+          <li key={step}>
+            <span>{step}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
 }
 
 function ResourceList({ items, getText, renderItem }) {
