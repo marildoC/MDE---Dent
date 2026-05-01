@@ -81,6 +81,16 @@ class TreatmentWorkflowViewSet(AdminWorkflowViewSet):
             }
         )
 
+    @action(detail=True, methods=["get"], url_path="validation-report")
+    def validation_report(self, request, pk=None):
+        workflow = self.get_object()
+        return Response(
+            {
+                **validate_workflow(workflow),
+                "status": workflow.status,
+            }
+        )
+
     @action(detail=True, methods=["post"], url_path="validate")
     def validate_workflow_action(self, request, pk=None):
         workflow = self.get_object()

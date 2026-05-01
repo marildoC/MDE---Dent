@@ -9,6 +9,7 @@ import {
   createSymptomDefinition,
   createSymptomRule,
   getWorkflow,
+  getWorkflowValidationReport,
   listAdviceBoundaries,
   listCareStages,
   listEscalationRules,
@@ -108,6 +109,7 @@ export default function WorkflowDetailPage() {
       allRules,
       allBoundaries,
       allEscalations,
+      validationReport,
     ] = await Promise.all([
       getWorkflow(workflowId),
       listCareStages(),
@@ -115,6 +117,7 @@ export default function WorkflowDetailPage() {
       listSymptomRules(),
       listAdviceBoundaries(),
       listEscalationRules(),
+      getWorkflowValidationReport(workflowId),
     ])
 
     const workflowStages = allStages.filter((stage) => String(stage.workflow) === workflowId)
@@ -128,6 +131,7 @@ export default function WorkflowDetailPage() {
       rules: workflowRules,
       stages: workflowStages,
       symptoms: allSymptoms.filter((symptom) => String(symptom.workflow) === workflowId),
+      validationReport,
       workflowData,
     }
   }, [workflowId])
@@ -146,6 +150,7 @@ export default function WorkflowDetailPage() {
     setRules(data.rules)
     setBoundaries(data.boundaries)
     setEscalations(data.escalations)
+    setValidationResult(data.validationReport)
   }, [fetchWorkflowData])
 
   useEffect(() => {
@@ -168,6 +173,7 @@ export default function WorkflowDetailPage() {
         setRules(data.rules)
         setBoundaries(data.boundaries)
         setEscalations(data.escalations)
+        setValidationResult(data.validationReport)
       })
       .catch((err) => {
         if (isMounted) {
@@ -350,7 +356,6 @@ export default function WorkflowDetailPage() {
                 Archive
               </button>
             </div>
-            {validationResult ? <ValidationResult result={validationResult} /> : null}
           </div>
           <form className="panel-form compact-form" onSubmit={submitWorkflow}>
             <label>
@@ -384,6 +389,8 @@ export default function WorkflowDetailPage() {
             </button>
           </form>
         </Section>
+
+        <StaticSemanticsPanel result={validationResult} workflowStatus={workflow.status} />
 
         <Section title="Care Stages">
           {isActive ? <ActiveWorkflowNotice /> : null}
@@ -682,26 +689,52 @@ export default function WorkflowDetailPage() {
   )
 }
 
-function ValidationResult({ result }) {
+function StaticSemanticsPanel({ result, workflowStatus }) {
+  const overallLabel = result ? (result.is_valid ? 'Valid' : 'Invalid') : 'Not validated'
+  const overallClass = result ? (result.is_valid ? 'is-valid' : 'is-invalid') : 'status-draft'
+
   return (
-    <section className={result.is_valid ? 'validation-box is-valid' : 'validation-box is-invalid'}>
-      <strong>{result.is_valid ? 'Workflow is valid.' : 'Workflow needs changes.'}</strong>
-      {result.errors?.length ? (
-        <ul>
-          {result.errors.map((message) => (
-            <li key={message}>{message}</li>
+    <section className="section-panel validation-panel">
+      <div className="validation-summary">
+        <div>
+          <p className="eyebrow">Workflow DSL Studio</p>
+          <h2>Static Semantics / Validation</h2>
+          <p className="muted-text">
+            Checks whether this workflow model is semantically valid before it can be activated.
+          </p>
+        </div>
+        <span className={`status-badge ${overallClass}`}>{overallLabel}</span>
+      </div>
+      <p className="muted-text validation-context">
+        Workflow status: {formatConstant(workflowStatus)}
+      </p>
+      {result?.checks?.length ? (
+        <ul className="semantic-check-list">
+          {result.checks.map((check) => (
+            <li className={`semantic-check semantic-check-${check.status}`} key={check.key}>
+              <span className="semantic-check-marker">{semanticCheckMarker(check.status)}</span>
+              <span>
+                <strong>{check.label}</strong>
+                {check.message ? <small>{check.message}</small> : null}
+              </span>
+            </li>
           ))}
         </ul>
-      ) : null}
-      {result.warnings?.length ? (
-        <ul>
-          {result.warnings.map((message) => (
-            <li key={message}>{message}</li>
-          ))}
-        </ul>
-      ) : null}
+      ) : (
+        <p className="muted-text">Run validation to inspect this workflow model.</p>
+      )}
     </section>
   )
+}
+
+function semanticCheckMarker(status) {
+  if (status === 'pass') {
+    return 'PASS'
+  }
+  if (status === 'warning') {
+    return 'WARN'
+  }
+  return 'FAIL'
 }
 
 function ResourceList({ items, getText, renderItem }) {

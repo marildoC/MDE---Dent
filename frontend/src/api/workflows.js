@@ -41,6 +41,10 @@ export function getWorkflowDslPreview(id) {
   return api(`/workflows/treatment-workflows/${id}/dsl-preview/`)
 }
 
+export function getWorkflowValidationReport(id) {
+  return api(`/workflows/treatment-workflows/${id}/validation-report/`)
+}
+
 export function createWorkflow(payload) {
   return createResource('/workflows/treatment-workflows/', payload)
 }

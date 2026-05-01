@@ -29,6 +29,10 @@ VALID_CONDITION = {
 }
 
 
+def check_by_key(result, key):
+    return next(check for check in result["checks"] if check["key"] == key)
+
+
 class ConditionFormatterTests(SimpleTestCase):
     def test_formats_single_condition(self):
         condition = {"field": "pain_level", "operator": ">=", "value": 8}
@@ -456,6 +460,36 @@ class WorkflowValidationLifecycleTests(APITestCase):
 
         self.assertTrue(result["is_valid"])
         self.assertEqual(result["errors"], [])
+        self.assertTrue(result["checks"])
+        self.assertTrue(all(check["status"] == "pass" for check in result["checks"]))
+
+    def test_invalid_workflow_returns_failed_validation_checks(self):
+        workflow = self._workflow()
+
+        result = validate_workflow(workflow)
+
+        self.assertFalse(result["is_valid"])
+        self.assertEqual(check_by_key(result, "stages_exist")["status"], "fail")
+        self.assertEqual(check_by_key(result, "symptoms_exist")["status"], "fail")
+        self.assertEqual(check_by_key(result, "rules_exist")["status"], "fail")
+        self.assertEqual(check_by_key(result, "workflow_can_be_activated")["status"], "fail")
+
+    def test_validation_report_action_returns_structured_static_semantics(self):
+        workflow = self._complete_workflow()
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.get(
+            f"/api/workflows/treatment-workflows/{workflow.id}/validation-report/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["is_valid"])
+        self.assertEqual(response.data["status"], WorkflowStatus.DRAFT)
+        self.assertEqual(check_by_key(response.data, "stage_ranges_valid")["status"], "pass")
+        self.assertEqual(
+            check_by_key(response.data, "high_urgent_rules_have_escalation")["status"],
+            "pass",
+        )
 
     def test_validate_action_moves_valid_draft_to_validated(self):
         workflow = self._complete_workflow()
@@ -466,6 +500,7 @@ class WorkflowValidationLifecycleTests(APITestCase):
         workflow.refresh_from_db()
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["is_valid"])
+        self.assertIn("checks", response.data)
         self.assertEqual(workflow.status, WorkflowStatus.VALIDATED)
 
     def test_invalid_workflow_cannot_be_validated(self):
