@@ -7,8 +7,10 @@ from .models import (
     EscalationRule,
     RecommendedAction,
     RiskLevel,
+    SymptomDataType,
     SymptomRule,
 )
+from .condition_formatting import format_condition
 from .validators import LOGICAL_GROUPS, validate_condition_shape
 
 
@@ -37,6 +39,117 @@ def validate_workflow(workflow):
         "errors": errors,
         "warnings": warnings,
     }
+
+
+def render_workflow_dsl_preview(workflow):
+    stages = list(workflow.stages.all().order_by("sort_order", "start_day", "id"))
+    symptoms = list(workflow.symptom_definitions.all().order_by("key"))
+    boundaries = list(
+        AIAdviceBoundary.objects.filter(workflow=workflow)
+        .select_related("stage")
+        .order_by("stage_id", "id")
+    )
+    escalation_rules = list(
+        EscalationRule.objects.filter(symptom_rule__stage__workflow=workflow)
+        .select_related("symptom_rule")
+        .order_by("symptom_rule__stage__start_day", "symptom_rule_id")
+    )
+
+    lines = [
+        f'workflow "{workflow.name}" {{',
+        f"  treatment {_display_choice(workflow, 'treatment_type')}",
+        f"  status {_display_choice(workflow, 'status')}",
+    ]
+
+    if stages:
+        lines.append("")
+
+    for index, stage in enumerate(stages):
+        if index:
+            lines.append("")
+        lines.extend(_render_stage(stage, symptoms))
+
+    if boundaries:
+        lines.append("")
+        lines.extend(_render_advice_boundaries(boundaries))
+
+    if escalation_rules:
+        lines.append("")
+        lines.extend(_render_escalation_rules(escalation_rules))
+
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def _render_stage(stage, symptoms):
+    lines = [f'  stage "{stage.name}" from day {stage.start_day} to day {stage.end_day} {{']
+
+    for symptom in symptoms:
+        lines.append(f"    symptom {symptom.key}: {_dsl_data_type(symptom.data_type)}")
+
+    rules = list(stage.symptom_rules.all().order_by("id"))
+    if symptoms and rules:
+        lines.append("")
+
+    for index, rule in enumerate(rules):
+        if index:
+            lines.append("")
+        lines.extend(
+            [
+                f'    rule "{rule.name}" {{',
+                f"      when {format_condition(rule.condition)}",
+                f"      risk {rule.risk_level}",
+                f"      action {rule.recommended_action}",
+            ]
+        )
+        if rule.appointment_priority:
+            lines.append(f"      appointment {rule.appointment_priority}")
+        lines.append("    }")
+
+    lines.append("  }")
+    return lines
+
+
+def _render_advice_boundaries(boundaries):
+    lines = ["  advice_boundary {"]
+    for boundary in boundaries:
+        for topic in boundary.allowed_topics:
+            lines.append(f"    allow {topic}")
+        for topic in boundary.forbidden_topics:
+            lines.append(f"    forbid {topic}")
+        if boundary.required_disclaimer:
+            lines.append("    require disclaimer")
+    lines.append("  }")
+    return lines
+
+
+def _render_escalation_rules(escalation_rules):
+    lines = ["  escalation {"]
+    for escalation_rule in escalation_rules:
+        lines.extend(
+            [
+                f'    rule "{escalation_rule.symptom_rule.name}"',
+                f"    urgency {escalation_rule.urgency}",
+                f"    appointment {escalation_rule.appointment_priority}",
+            ]
+        )
+    lines.append("  }")
+    return lines
+
+
+def _display_choice(instance, field_name):
+    display = getattr(instance, f"get_{field_name}_display", None)
+    value = display() if display else str(getattr(instance, field_name))
+    return value.replace("- Follow-Up", "").replace("-", " ")
+
+
+def _dsl_data_type(data_type):
+    return {
+        SymptomDataType.INTEGER: "number",
+        SymptomDataType.BOOLEAN: "boolean",
+        SymptomDataType.CHOICE: "choice",
+        SymptomDataType.TEXT: "text",
+    }.get(data_type, str(data_type).lower())
 
 
 def _validate_structure(stages, symptoms, rules, errors):

@@ -26,7 +26,12 @@ from .serializers import (
     SymptomRuleSerializer,
     TreatmentWorkflowSerializer,
 )
-from .services import validate_workflow, workflow_for_instance, workflow_for_validated_data
+from .services import (
+    render_workflow_dsl_preview,
+    validate_workflow,
+    workflow_for_instance,
+    workflow_for_validated_data,
+)
 
 
 class AdminWorkflowViewSet(ModelViewSet):
@@ -65,6 +70,16 @@ class TreatmentWorkflowViewSet(AdminWorkflowViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=["get"], url_path="dsl-preview")
+    def dsl_preview(self, request, pk=None):
+        workflow = self.get_object()
+        return Response(
+            {
+                "workflow": workflow.id,
+                "dsl_preview": render_workflow_dsl_preview(workflow),
+            }
+        )
 
     @action(detail=True, methods=["post"], url_path="validate")
     def validate_workflow_action(self, request, pk=None):

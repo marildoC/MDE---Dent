@@ -9,6 +9,7 @@ from .models import (
     SymptomRule,
     TreatmentWorkflow,
 )
+from .condition_formatting import format_condition
 from .validators import validate_condition_shape
 
 
@@ -76,6 +77,8 @@ class SymptomDefinitionSerializer(serializers.ModelSerializer):
 
 
 class SymptomRuleSerializer(serializers.ModelSerializer):
+    condition_text = serializers.SerializerMethodField()
+
     class Meta:
         model = SymptomRule
         fields = (
@@ -83,11 +86,16 @@ class SymptomRuleSerializer(serializers.ModelSerializer):
             "stage",
             "name",
             "condition",
+            "condition_text",
             "risk_level",
             "recommended_action",
             "appointment_priority",
             "explanation",
         )
+        read_only_fields = ("condition_text",)
+
+    def get_condition_text(self, obj):
+        return format_condition(obj.condition)
 
     def validate_condition(self, value):
         try:

@@ -1,3 +1,4 @@
+from django.test import SimpleTestCase
 from rest_framework.test import APITestCase
 
 from accounts.models import User, UserRole
@@ -16,6 +17,7 @@ from .models import (
     TreatmentWorkflow,
     WorkflowStatus,
 )
+from .condition_formatting import format_condition
 from .services import validate_workflow
 
 
@@ -25,6 +27,50 @@ VALID_CONDITION = {
         {"field": "bad_smell", "operator": "=", "value": True},
     ]
 }
+
+
+class ConditionFormatterTests(SimpleTestCase):
+    def test_formats_single_condition(self):
+        condition = {"field": "pain_level", "operator": ">=", "value": 8}
+
+        self.assertEqual(format_condition(condition), "pain_level >= 8")
+
+    def test_formats_all_group(self):
+        self.assertEqual(
+            format_condition(VALID_CONDITION),
+            "pain_level >= 8 AND bad_smell = true",
+        )
+
+    def test_formats_any_group(self):
+        condition = {
+            "any": [
+                {"field": "fever", "operator": "=", "value": True},
+                {"field": "bleeding", "operator": "=", "value": "Severe"},
+            ]
+        }
+
+        self.assertEqual(format_condition(condition), "fever = true OR bleeding = Severe")
+
+    def test_formats_nested_groups_with_parentheses(self):
+        condition = {
+            "all": [
+                {"field": "pain_level", "operator": ">=", "value": 8},
+                {
+                    "any": [
+                        {"field": "fever", "operator": "=", "value": True},
+                        {"field": "bad_smell", "operator": "=", "value": True},
+                    ]
+                },
+            ]
+        }
+
+        self.assertEqual(
+            format_condition(condition),
+            "pain_level >= 8 AND (fever = true OR bad_smell = true)",
+        )
+
+    def test_malformed_condition_uses_safe_fallback(self):
+        self.assertEqual(format_condition({"raw": "pain_level >= 8"}), "Unsupported condition structure")
 
 
 class WorkflowAPITests(APITestCase):
@@ -483,6 +529,33 @@ class WorkflowValidationLifecycleTests(APITestCase):
         self.assertEqual(validate_response.status_code, 403)
         self.assertEqual(activate_response.status_code, 403)
         self.assertEqual(archive_response.status_code, 403)
+
+    def test_dsl_preview_action_returns_generated_read_only_text(self):
+        workflow = self._complete_workflow()
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.get(
+            f"/api/workflows/treatment-workflows/{workflow.id}/dsl-preview/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["workflow"], workflow.id)
+        preview = response.data["dsl_preview"]
+        self.assertIn('workflow "Post-Extraction Follow-Up" {', preview)
+        self.assertIn("treatment Post Extraction", preview)
+        self.assertIn("status Draft", preview)
+        self.assertIn('stage "Day 4-7" from day 4 to day 7 {', preview)
+        self.assertIn("symptom pain_level: number", preview)
+        self.assertIn("symptom bad_smell: boolean", preview)
+        self.assertIn('rule "Severe pain with bad smell" {', preview)
+        self.assertIn("when pain_level >= 8 AND bad_smell = true", preview)
+        self.assertIn("risk HIGH", preview)
+        self.assertIn("action ESCALATE_TO_DENTIST", preview)
+        self.assertIn("appointment HIGH", preview)
+        self.assertIn("allow aftercare reminders", preview)
+        self.assertIn("forbid diagnosis", preview)
+        self.assertIn("forbid prescription", preview)
+        self.assertIn("escalation {", preview)
 
     def test_active_workflow_structure_cannot_be_edited(self):
         workflow = self._complete_workflow()

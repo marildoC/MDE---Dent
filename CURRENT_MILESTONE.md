@@ -1,142 +1,262 @@
-Milestone 13 - UI Completion and Demo Flow
-Summary
-Polish the existing DentCare-MDE UI so the implemented Post-Extraction workflow can be demonstrated clearly across patient, staff/admin, and admin audit views.
+We expose the workflow system you already built as a domain-specific workflow language through clear UI panels, readable rule syntax, validation semantics, execution semantics, and runtime transformation trace.
 
-The current CURRENT_MILESTONE.md is mostly aligned with the roadmap. Refine it to be more repository-aware, keep it limited to UI/demo polish, and make the implementation order explicit.
+The goal is:
 
-Goal
-Make the existing browser experience demo-ready for this implemented chain:
+Keep the current DentCare-MDE architecture.
+Make the model-driven / DSL nature visible, explainable, and defendable.
+1. Core idea
 
-workflow setup -> patient follow-up case -> symptom report -> risk assessment -> bounded advice -> escalation -> appointment -> case resolution -> audit trace
+DentCare-MDE already works like this:
 
-This milestone must not add new domain behavior.
+Workflow model
+→ validation
+→ active workflow
+→ follow-up case
+→ symptom report
+→ deterministic rule evaluation
+→ risk assessment
+→ bounded advice / escalation / appointment / audit
 
-Why This Matters
-Milestones 1-12 implemented and tested the core workflow-driven system. Milestone 13 should make that real system understandable in the browser without changing deterministic backend rules.
+Now we want to make this visible as:
 
-The UI should clearly show:
+Dental Follow-Up DSL
+→ static semantics
+→ execution semantics
+→ runtime transformation trace
 
-workflow status and lifecycle
-active patient follow-up context
-report history and risk assessment
-bounded patient advice
-staff escalation and appointment handling
-admin audit trace
-In Scope
-Improve existing React pages only:
-Dashboards.jsx
-WorkflowListPage.jsx
-WorkflowDetailPage.jsx
-FollowUpManagementPage.jsx
-AuditLogPage.jsx
-Improve existing navigation between dashboard, workflows, follow-up cases, and audit logs.
-Replace remaining placeholder copy with accurate implemented-state copy.
-Add readable labels/status badges for workflow, case, report, risk, escalation, appointment, and audit states.
-Improve existing form usability, loading states, empty states, success messages, and API error display.
-Hide or translate raw internal constants on patient-facing views where practical.
-Keep compact technical context visible on staff/admin views where useful.
-Ensure terminal/resolved/closed cases are visibly non-actionable.
-Fix small backend serializer/view issues only if an existing UI flow is blocked.
-Run frontend lint/build and backend checks.
-Out Of Scope
-New backend business logic.
-New models, migrations, workflow rules, report fields, or decision behavior.
-New advice, escalation, appointment, or audit semantics.
-Notifications, real-time updates, LLM/chat, analytics, exports, full calendar scheduling.
-Report/diagram work.
-Cloud/Docker work.
-UI framework or design-system migration.
-Broad redesign beyond demo-flow clarity.
-Backend Work
-Backend work should be avoided by default.
+So the project becomes more clearly positioned as:
 
-Allowed only if the UI exposes a real blocker:
+A model-driven dental follow-up system using an internal DSL for clinical workflow definition and execution.
+2. What we are not doing
 
-expose an already-existing read-only serializer field needed by an existing screen
-fix broken response shape, filtering, or permission behavior for the implemented demo path
-fix an endpoint issue that prevents existing patient/staff/admin UI flows
-Do not change:
+We are not doing this:
 
-workflow validation
-risk assessment logic
-advice generation
-automatic escalation creation
-appointment priority/lifecycle rules
-audit logging semantics
-Documentation cleanup:
+Write a full external DSL parser
+Use ANTLR/Xtext
+Replace workflow forms with raw text editing
+Let admins write executable rules
+Use LLMs to generate rules
+Use SQL-like free commands as the core DSL
+Change decision-engine logic
+Change risk/advice/escalation/appointment behavior
 
-update PROJECT_STATUS.md active milestone from Milestone 12 to Milestone 13 when implementation begins or completes, because current docs conflict.
-Frontend Work
-Work in dependency order:
+Reason: that would add complexity and risk without improving the real value of the current system.
 
-Navigation and dashboards
+The current system is already strong. We only need to make its language/model layer explicit.
 
-Make patient, staff, and admin dashboards show useful implemented entry points.
-Ensure admin links to workflow management, follow-up cases, and audit logs are clear.
-Ensure staff link to follow-up management is clear.
-Patient flow
+3. What we are doing
 
-Show active follow-up case, treatment date, recovery day, and status.
-Show symptom report form only when case status allows reports.
-Show report history with readable risk/advice/escalation/appointment summaries.
-Translate patient-facing constants where practical.
-Staff/admin follow-up flow
+We add a DSL/MDE Enhancement layer around the existing workflow system.
 
-Improve follow-up case list readability.
-Group report, risk, advice, escalation, appointment, and lifecycle information clearly.
-Make invalid/terminal actions disabled or visibly unavailable.
-Improve staff response and appointment controls without adding scheduling features.
-Admin workflow and audit flow
+This means:
 
-Improve workflow status, validation, activation, and archive visibility.
-Keep workflow forms form-based, not graphical.
-Improve audit log readability: timestamp, actor, action, target, compact details.
-CSS and responsiveness
+Existing workflow data remains the source of truth.
+The system generates DSL-style views from that data.
+The system shows validation as static semantics.
+The system shows runtime behavior as execution semantics.
+The system shows report processing as transformation trace.
 
-Keep styling in existing CSS.
-Reuse current layout patterns.
-Fix mobile/text overflow issues where found.
-Avoid introducing new dependencies.
-Expected File/Module Impact
-Frontend likely:
+So the workflow is still edited safely through forms, but now the user/admin can also see:
 
-frontend/src/pages/Dashboards.jsx
-frontend/src/pages/FollowUpManagementPage.jsx
-frontend/src/pages/WorkflowListPage.jsx
-frontend/src/pages/WorkflowDetailPage.jsx
-frontend/src/pages/AuditLogPage.jsx
-frontend/src/App.css
-Backend only if needed:
+"This workflow is a domain-specific model."
+"This is its DSL representation."
+"These are its semantic validation checks."
+"This is how it executes at runtime."
+"This report was transformed through these rules into these runtime objects."
+4. Final improvement package
 
-serializers/views in existing apps, with no model changes expected
-Docs:
+The clean milestone should be:
 
-CURRENT_MILESTONE.md rewrite to this plan
-PROJECT_STATUS.md active milestone correction when moving forward
-Dependencies And Migrations
-No new package dependencies expected.
-No migrations expected.
-If a model change appears necessary, stop and justify it before implementation.
-Completion Condition
-Milestone 13 is complete when:
+DSL/MDE Enhancement — Workflow DSL Studio and Execution Trace
 
-full browser demo can be performed through existing UI routes
-patient report/advice/escalation/appointment status is clear
-staff/admin escalation and appointment handling is clear
-admin workflow and audit navigation is clear
-terminal cases are clearly non-actionable
-patient-facing views avoid diagnosis/prescription wording and avoid unnecessary raw constants
-no new product scope was added
-npm.cmd run lint passes
-npm.cmd run build passes
-python manage.py check passes
-python manage.py makemigrations --check --dry-run passes
-backend tests pass if backend code changes
-Cautions
-Preserve the model-driven identity: workflow data controls runtime behavior.
-Do not weaken permissions for UI convenience.
-Do not change tested Milestone 1-12 backend behavior.
-Do not expose audit logs to patients.
-Do not treat image upload as diagnosis.
-Do not add future milestone features under UI polish.
-Keep changes focused on making the real implemented system understandable.
+It should contain five main parts.
+
+Part 1 — Workflow DSL Preview
+
+Add a read-only section inside the workflow detail page:
+
+Workflow DSL Preview
+
+This shows the current workflow as a readable DSL-like text.
+
+Example logic:
+
+workflow PostExtractionFollowUp {
+  treatment POST_EXTRACTION
+
+  stage "Day 4-7" from day 4 to day 7 {
+    symptom pain_level: number range 0..10
+    symptom fever: boolean
+    symptom bad_smell: boolean
+
+    rule "High pain with bad smell" {
+      when pain_level >= 8 AND bad_smell = true
+      risk HIGH
+      action ESCALATE_TO_DENTIST
+      appointment HIGH
+    }
+  }
+
+  advice_boundary {
+    forbid diagnosis
+    forbid prescription
+  }
+}
+
+Important logic:
+
+The DSL preview is generated from saved workflow data.
+The preview is not manually edited.
+The database/workflow model remains the source of truth.
+
+Why this matters:
+
+It gives your project a visible concrete syntax for the DSL.
+
+Part 2 — Condition Formatter
+
+Your rules are stored as structured JSON. That is correct technically, but not good visually.
+
+So we add a formatter that displays rule conditions in a readable form.
+
+Instead of showing this kind of logic:
+
+{"all": [{"field": "pain_level", "operator": ">=", "value": 8}]}
+
+Show:
+
+pain_level >= 8
+
+For multiple conditions:
+
+pain_level >= 8 AND bad_smell = true
+
+Use this readable condition format in:
+
+Workflow detail page
+DSL preview
+Staff report/risk details
+Transformation trace
+Possibly audit/event details if useful
+
+Why this matters:
+
+It makes the workflow rule model feel like a real domain language, not raw database content.
+
+Part 3 — Static Semantics / Validation Panel
+
+Add a section in the workflow detail page:
+
+Static Semantics / Validation
+
+This shows what the system checks before a workflow can become active.
+
+Example:
+
+✓ Workflow has at least one care stage
+✓ Care stages have valid day ranges
+✓ Care stages do not overlap
+✓ Rules reference known symptoms
+✓ Rule operators are supported
+✓ HIGH/URGENT rules have escalation behavior
+✓ Advice boundaries block diagnosis
+✓ Advice boundaries block prescription
+✓ Workflow can be activated
+
+If something is wrong:
+
+✗ Rule references unknown field "temperature"
+✗ Stage Day 2-4 overlaps with Day 4-7
+✗ HIGH rule has no escalation rule
+
+Important logic:
+
+This should reuse the existing validation behavior.
+Do not create a second validation system.
+Just display validation results in a more DSL/MDE-oriented way.
+
+Why this matters:
+
+In DSL/MDE terms, this is the static semantics of your domain-specific language.
+
+Part 4 — Execution Semantics Panel
+
+Add another section in the workflow detail page:
+
+Execution Semantics
+
+This explains how the active workflow is interpreted when a patient submits a report.
+
+Example:
+
+1. Detect care stage from treatment date and report day.
+2. Select rules from the detected stage.
+3. Evaluate structured rule conditions.
+4. Select the highest matching risk.
+5. Persist RiskAssessment.
+6. Generate bounded advice.
+7. Create escalation for HIGH/URGENT outcomes.
+8. Allow appointment creation from escalation.
+9. Record audit trace.
+
+Important logic:
+
+This does not change backend behavior.
+It explains the actual runtime interpretation already implemented.
+
+Why this matters:
+
+This makes the workflow model look like an executable domain language, not just a CRUD form.
+
+Part 5 — Runtime Transformation Trace
+
+This is the most important addition for the report and defense.
+
+In staff/admin report details, add:
+
+Model Execution Trace
+
+For each report, show how the system transformed patient input into runtime objects.
+
+Example:
+
+Source model:
+Workflow: Post-Extraction Follow-Up
+Detected stage: Day 4-7
+
+Report input:
+pain_level = 10
+swelling = Severe
+fever = Yes
+bad_smell = Yes
+
+Rule evaluation:
+Matched rule: High pain with bad smell after day 3
+Condition: pain_level >= 8 AND bad_smell = true
+
+Selected outcome:
+Risk: HIGH
+Action: ESCALATE_TO_DENTIST
+Appointment priority: HIGH
+
+Generated runtime objects:
+RiskAssessment #12
+AdviceMessage #12
+EscalationCase #3
+Appointment #2
+AuditLog entries
+
+Important logic:
+
+Patients do not need this technical trace.
+Staff/admin can see it.
+It should explain why the system acted.
+It should not expose unsafe clinical claims.
+
+Why this matters:
+
+This is your strongest MDE feature because it shows:
+
+model + input → transformation → runtime artifacts
+
+That is exactly aligned with model-driven engineering.

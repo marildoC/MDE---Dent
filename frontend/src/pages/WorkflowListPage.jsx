@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { createWorkflow, listWorkflows } from '../api/workflows.js'
+import { createWorkflow, getWorkflowDslPreview, listWorkflows } from '../api/workflows.js'
 import { useAuth } from '../auth/useAuth.js'
 import { formatConstant, statusClass } from '../utils/display.js'
 
@@ -18,6 +18,10 @@ export default function WorkflowListPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [openDslPreviews, setOpenDslPreviews] = useState({})
+  const [dslPreviews, setDslPreviews] = useState({})
+  const [dslLoading, setDslLoading] = useState({})
+  const [dslErrors, setDslErrors] = useState({})
 
   useEffect(() => {
     listWorkflows()
@@ -45,6 +49,30 @@ export default function WorkflowListPage() {
       setError(err.message)
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const toggleDslPreview = async (workflowId) => {
+    const isOpen = Boolean(openDslPreviews[workflowId])
+    setOpenDslPreviews((current) => ({
+      ...current,
+      [workflowId]: !isOpen,
+    }))
+
+    if (isOpen || dslPreviews[workflowId] || dslLoading[workflowId]) {
+      return
+    }
+
+    setDslLoading((current) => ({ ...current, [workflowId]: true }))
+    setDslErrors((current) => ({ ...current, [workflowId]: '' }))
+
+    try {
+      const data = await getWorkflowDslPreview(workflowId)
+      setDslPreviews((current) => ({ ...current, [workflowId]: data.dsl_preview }))
+    } catch (err) {
+      setDslErrors((current) => ({ ...current, [workflowId]: err.message }))
+    } finally {
+      setDslLoading((current) => ({ ...current, [workflowId]: false }))
     }
   }
 
@@ -100,14 +128,40 @@ export default function WorkflowListPage() {
           {!isLoading && workflows.length === 0 ? <p>No workflows yet.</p> : null}
           <ul className="resource-list">
             {workflows.map((workflow) => (
-              <li key={workflow.id}>
-                <span>
-                  <Link to={`/admin/workflows/${workflow.id}`}>{workflow.name}</Link>
-                  <small>{formatConstant(workflow.treatment_type)}</small>
-                </span>
-                <span className={`status-badge ${statusClass(workflow.status)}`}>
-                  {formatConstant(workflow.status)}
-                </span>
+              <li className="workflow-list-item" key={workflow.id}>
+                <div className="workflow-list-summary">
+                  <span>
+                    <Link to={`/admin/workflows/${workflow.id}`}>{workflow.name}</Link>
+                    <small className="workflow-list-meta">
+                      {formatConstant(workflow.treatment_type)}
+                      <span aria-hidden="true">|</span>
+                      <button
+                        aria-expanded={Boolean(openDslPreviews[workflow.id])}
+                        className="inline-action-button"
+                        onClick={() => toggleDslPreview(workflow.id)}
+                        type="button"
+                      >
+                        {openDslPreviews[workflow.id] ? 'Hide DSL' : 'View DSL'}
+                      </button>
+                    </small>
+                  </span>
+                  <span className={`status-badge ${statusClass(workflow.status)}`}>
+                    {formatConstant(workflow.status)}
+                  </span>
+                </div>
+                {openDslPreviews[workflow.id] ? (
+                  <div className="dsl-preview-panel">
+                    {dslLoading[workflow.id] ? <p>Loading DSL preview...</p> : null}
+                    {dslErrors[workflow.id] ? (
+                      <p className="form-error compact-form-error">{dslErrors[workflow.id]}</p>
+                    ) : null}
+                    {dslPreviews[workflow.id] ? (
+                      <pre aria-label={`${workflow.name} DSL preview`}>
+                        {dslPreviews[workflow.id]}
+                      </pre>
+                    ) : null}
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>

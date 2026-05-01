@@ -1127,11 +1127,28 @@ function RiskAssessmentSummary({
         onGenerate={onGenerateAdvice}
       />
       <EscalationSummary appointment={appointment} escalation={escalation} />
-      {assessment.matched_rules.length > 0 ? (
-        <small>
-          Matched rules: {assessment.matched_rules.map((rule) => rule.name).join(', ')}
+      <MatchedRulesSummary assessment={assessment} />
+    </span>
+  )
+}
+
+function MatchedRulesSummary({ assessment }) {
+  const matchedRules = assessment.matched_rule_details?.length
+    ? assessment.matched_rule_details
+    : assessment.matched_rules || []
+
+  if (matchedRules.length === 0) {
+    return null
+  }
+
+  return (
+    <span className="matched-rule-list">
+      {matchedRules.map((rule, index) => (
+        <small key={rule.id || `${rule.name}-${index}`}>
+          Matched rule: {rule.name}
+          {rule.condition_text ? <> | Condition: {rule.condition_text}</> : null}
         </small>
-      ) : null}
+      ))}
     </span>
   )
 }
@@ -1312,6 +1329,9 @@ function EscalationReviewCard({
             <small>
               Risk action: {formatConstant(escalation.risk_assessment_detail?.recommended_action)}
             </small>
+            {escalation.risk_assessment_detail ? (
+              <MatchedRulesSummary assessment={escalation.risk_assessment_detail} />
+            ) : null}
             {escalation.staff_response ? (
               <small>Current response: {escalation.staff_response}</small>
             ) : (

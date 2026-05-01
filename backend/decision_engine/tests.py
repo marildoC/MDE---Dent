@@ -252,6 +252,10 @@ class DecisionEngineTests(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(RiskAssessment.objects.count(), 1)
         self.assertEqual(response.data["risk_assessment"]["risk_level"], RiskLevel.HIGH)
+        self.assertEqual(
+            response.data["risk_assessment"]["matched_rule_details"][0]["condition_text"],
+            "pain_level >= 8 AND bad_smell = true",
+        )
 
     def test_patient_cannot_evaluate_or_view_another_patient_assessment(self):
         report = self.make_report(follow_up_case=self.other_case)

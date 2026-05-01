@@ -550,9 +550,15 @@ export default function WorkflowDetailPage() {
           </form>
           <ResourceList
             items={rules}
-            getText={(rule) =>
-              `${rule.name}: ${formatConstant(rule.risk_level)} / ${formatConstant(rule.recommended_action)}`
-            }
+            renderItem={(rule) => (
+              <span className="rule-summary">
+                <strong>Rule: {rule.name}</strong>
+                <small>When: {rule.condition_text || 'Unsupported condition structure'}</small>
+                <small>Risk: {formatConstant(rule.risk_level)}</small>
+                <small>Action: {formatConstant(rule.recommended_action)}</small>
+                <small>Appointment priority: {formatConstant(rule.appointment_priority)}</small>
+              </span>
+            )}
           />
         </Section>
 
@@ -698,7 +704,7 @@ function ValidationResult({ result }) {
   )
 }
 
-function ResourceList({ items, getText }) {
+function ResourceList({ items, getText, renderItem }) {
   if (items.length === 0) {
     return <p className="muted-text">None yet.</p>
   }
@@ -707,7 +713,7 @@ function ResourceList({ items, getText }) {
     <ul className="resource-list compact-list">
       {items.map((item) => (
         <li key={item.id}>
-          <span>{getText(item)}</span>
+          {renderItem ? renderItem(item) : <span>{getText(item)}</span>}
         </li>
       ))}
     </ul>
