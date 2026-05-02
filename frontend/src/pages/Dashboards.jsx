@@ -8,11 +8,14 @@ import { listMyFollowUpCases } from '../api/patients.js'
 import { createSymptomReport, listSymptomReports } from '../api/reports.js'
 import { useAuth } from '../auth/useAuth.js'
 import {
-  formatBoolean,
   formatConstant,
   formatDateTime,
+  legacySymptomDefinitions,
+  primaryReportSummary,
+  reportSymptomEntries,
   riskClass,
   statusClass,
+  workflowSymptomDefinitions,
 } from '../utils/display.js'
 
 const dashboardCopy = {
@@ -33,17 +36,92 @@ const dashboardCopy = {
   },
 }
 
-const reportInitial = {
-  bad_smell: 'false',
-  bleeding: 'NONE',
-  fever: 'false',
+const reportSupportInitial = {
   image: null,
   notes: '',
-  pain_level: '0',
-  swelling: 'NONE',
+  symptom_values: {},
 }
 
 const terminalCaseStatuses = new Set(['RESOLVED', 'CLOSED'])
+
+function symptomOptions(definition) {
+  const configured = Array.isArray(definition.allowed_values) ? definition.allowed_values : []
+  if (configured.length) {
+    return configured.map((value) => String(value))
+  }
+
+  if (['swelling', 'bleeding'].includes(definition.key)) {
+    return ['NONE', 'MILD', 'SEVERE']
+  }
+
+  return []
+}
+
+function initialSymptomValue(definition) {
+  if (definition.data_type === 'BOOLEAN') {
+    return 'false'
+  }
+
+  if (definition.data_type === 'CHOICE') {
+    return symptomOptions(definition)[0] || ''
+  }
+
+  if (definition.data_type === 'INTEGER') {
+    if (definition.min_value !== null && definition.min_value !== undefined) {
+      return String(definition.min_value)
+    }
+    return definition.key === 'pain_level' ? '0' : ''
+  }
+
+  return ''
+}
+
+function buildReportInitial(definitions = legacySymptomDefinitions) {
+  return {
+    ...reportSupportInitial,
+    symptom_values: definitions.reduce(
+      (values, definition) => ({
+        ...values,
+        [definition.key]: initialSymptomValue(definition),
+      }),
+      {},
+    ),
+  }
+}
+
+function serializeSymptomValues(definitions, values) {
+  return definitions.reduce((serialized, definition) => {
+    const rawValue = values[definition.key]
+    if ((rawValue === '' || rawValue === undefined || rawValue === null) && !definition.is_required) {
+      return serialized
+    }
+
+    let value = rawValue
+    if (definition.data_type === 'INTEGER') {
+      value = Number(rawValue)
+    } else if (definition.data_type === 'BOOLEAN') {
+      value = rawValue === true || rawValue === 'true'
+    } else if (definition.data_type === 'TEXT') {
+      value = rawValue || ''
+    }
+
+    return {
+      ...serialized,
+      [definition.key]: value,
+    }
+  }, {})
+}
+
+function legacyFieldsFromSymptomValues(values) {
+  const fields = {}
+  const legacyKeys = ['pain_level', 'swelling', 'bleeding', 'fever', 'bad_smell']
+  legacyKeys.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(values, key)) {
+      fields[key] = values[key]
+    }
+  })
+  return fields
+}
 
 function DashboardLayout({ variant }) {
   const { logout, user } = useAuth()
@@ -143,7 +221,7 @@ export function PatientDashboard() {
   const [escalations, setEscalations] = useState([])
   const [reports, setReports] = useState([])
   const [expandedReportIds, setExpandedReportIds] = useState(new Set())
-  const [reportForm, setReportForm] = useState(reportInitial)
+  const [reportForm, setReportForm] = useState(() => buildReportInitial())
   const [reportFormKey, setReportFormKey] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [evaluatingReportId, setEvaluatingReportId] = useState(null)
@@ -152,6 +230,10 @@ export function PatientDashboard() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const activeCase = followUpCases[selectedCaseIndex] || null
+  const activeSymptomDefinitions = useMemo(
+    () => workflowSymptomDefinitions(activeCase),
+    [activeCase],
+  )
   const sortedReports = useMemo(() => sortReportsNewestFirst(reports), [reports])
 
   useEffect(() => {
@@ -162,6 +244,8 @@ export function PatientDashboard() {
         if (isMounted) {
           setFollowUpCases(data)
           setSelectedCaseIndex(0)
+          setReportForm(buildReportInitial(workflowSymptomDefinitions(data[0])))
+          setReportFormKey((current) => current + 1)
         }
       })
       .catch((err) => {
@@ -214,7 +298,7 @@ export function PatientDashboard() {
     return () => {
       isMounted = false
     }
-  }, [activeCase])
+  }, [activeCase, activeSymptomDefinitions])
 
   const loadReports = async (caseId) => {
     const [appointmentsData, reportsData, escalationsData] = await Promise.all([
@@ -230,6 +314,18 @@ export function PatientDashboard() {
 
   const handleReportChange = (event) => {
     const { files, name, value } = event.target
+    if (name.startsWith('symptom_values.')) {
+      const symptomKey = name.replace('symptom_values.', '')
+      setReportForm((current) => ({
+        ...current,
+        symptom_values: {
+          ...current.symptom_values,
+          [symptomKey]: value,
+        },
+      }))
+      return
+    }
+
     setReportForm((current) => ({
       ...current,
       [name]: files ? files[0] || null : value,
@@ -246,10 +342,11 @@ export function PatientDashboard() {
     setAppointments([])
     setReports([])
     setEscalations([])
-    setReportForm(reportInitial)
+    const nextCaseIndex = (selectedCaseIndex + 1) % followUpCases.length
+    setReportForm(buildReportInitial(workflowSymptomDefinitions(followUpCases[nextCaseIndex])))
     setExpandedReportIds(new Set())
     setReportFormKey((current) => current + 1)
-    setSelectedCaseIndex((current) => (current + 1) % followUpCases.length)
+    setSelectedCaseIndex(nextCaseIndex)
   }
 
   const toggleReport = (reportId) => {
@@ -275,14 +372,18 @@ export function PatientDashboard() {
     setIsSubmittingReport(true)
 
     try {
+      const symptomValues = serializeSymptomValues(
+        activeSymptomDefinitions,
+        reportForm.symptom_values,
+      )
       await createSymptomReport({
-        ...reportForm,
-        bad_smell: reportForm.bad_smell === 'true',
-        fever: reportForm.fever === 'true',
         follow_up_case: activeCase.id,
-        pain_level: Number(reportForm.pain_level),
+        image: reportForm.image,
+        notes: reportForm.notes,
+        symptom_values: symptomValues,
+        ...legacyFieldsFromSymptomValues(symptomValues),
       })
-      setReportForm(reportInitial)
+      setReportForm(buildReportInitial(activeSymptomDefinitions))
       setReportFormKey((current) => current + 1)
       setMessage('Report submitted.')
       await loadReports(activeCase.id)
@@ -357,6 +458,7 @@ export function PatientDashboard() {
               appointments={appointments}
               form={reportForm}
               formKey={reportFormKey}
+              symptomDefinitions={activeSymptomDefinitions}
               expandedReportIds={expandedReportIds}
               isSubmitting={isSubmittingReport}
               message={message}
@@ -491,6 +593,7 @@ function SymptomReportSection({
   onSubmit,
   onToggleReport,
   reports,
+  symptomDefinitions,
 }) {
   const canSubmitReport = !terminalCaseStatuses.has(activeCase.status)
 
@@ -502,52 +605,11 @@ function SymptomReportSection({
           <p className="muted-text form-context">
             Images are optional supporting evidence for staff review only.
           </p>
-          <div className="inline-fields">
-            <label>
-              Pain level
-              <input
-                max="10"
-                min="0"
-                name="pain_level"
-                onChange={onChange}
-                required
-                type="number"
-                value={form.pain_level}
-              />
-            </label>
-            <label>
-              Swelling
-              <select name="swelling" onChange={onChange} required value={form.swelling}>
-                <option value="NONE">None</option>
-                <option value="MILD">Mild</option>
-                <option value="SEVERE">Severe</option>
-              </select>
-            </label>
-          </div>
-          <div className="inline-fields">
-            <label>
-              Bleeding
-              <select name="bleeding" onChange={onChange} required value={form.bleeding}>
-                <option value="NONE">None</option>
-                <option value="MILD">Mild</option>
-                <option value="SEVERE">Severe</option>
-              </select>
-            </label>
-            <label>
-              Fever
-              <select name="fever" onChange={onChange} required value={form.fever}>
-                <option value="false">No</option>
-                <option value="true">Yes</option>
-              </select>
-            </label>
-          </div>
-          <label>
-            Bad smell or taste
-            <select name="bad_smell" onChange={onChange} required value={form.bad_smell}>
-              <option value="false">No</option>
-              <option value="true">Yes</option>
-            </select>
-          </label>
+          <DynamicSymptomFields
+            definitions={symptomDefinitions}
+            onChange={onChange}
+            values={form.symptom_values}
+          />
           <label>
             Notes
             <textarea name="notes" onChange={onChange} value={form.notes} />
@@ -581,8 +643,92 @@ function SymptomReportSection({
         onGenerateAdvice={onGenerateAdvice}
         onToggleReport={onToggleReport}
         reports={reports}
+        symptomDefinitions={symptomDefinitions}
       />
     </div>
+  )
+}
+
+function DynamicSymptomFields({ definitions, onChange, values }) {
+  const rows = []
+  for (let index = 0; index < definitions.length; index += 2) {
+    rows.push(definitions.slice(index, index + 2))
+  }
+
+  return (
+    <>
+      {rows.map((row) => (
+        <div className="inline-fields" key={row.map((definition) => definition.key).join('-')}>
+          {row.map((definition) => (
+            <DynamicSymptomInput
+              definition={definition}
+              key={definition.key}
+              onChange={onChange}
+              value={values[definition.key] ?? ''}
+            />
+          ))}
+        </div>
+      ))}
+    </>
+  )
+}
+
+function DynamicSymptomInput({ definition, onChange, value }) {
+  const fieldName = `symptom_values.${definition.key}`
+  const required = definition.is_required !== false
+
+  if (definition.data_type === 'BOOLEAN') {
+    return (
+      <label>
+        {definition.label || formatConstant(definition.key)}
+        <select name={fieldName} onChange={onChange} required={required} value={String(value)}>
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+      </label>
+    )
+  }
+
+  if (definition.data_type === 'CHOICE') {
+    const options = symptomOptions(definition)
+    if (options.length) {
+      return (
+        <label>
+          {definition.label || formatConstant(definition.key)}
+          <select name={fieldName} onChange={onChange} required={required} value={value}>
+            {options.map((option) => (
+              <option key={option} value={option}>
+                {formatConstant(option)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )
+    }
+  }
+
+  if (definition.data_type === 'TEXT') {
+    return (
+      <label>
+        {definition.label || formatConstant(definition.key)}
+        <textarea name={fieldName} onChange={onChange} required={required} value={value} />
+      </label>
+    )
+  }
+
+  return (
+    <label>
+      {definition.label || formatConstant(definition.key)}
+      <input
+        max={definition.max_value ?? undefined}
+        min={definition.min_value ?? undefined}
+        name={fieldName}
+        onChange={onChange}
+        required={required}
+        type={definition.data_type === 'INTEGER' ? 'number' : 'text'}
+        value={value}
+      />
+    </label>
   )
 }
 
@@ -596,6 +742,7 @@ function ReportHistory({
   onGenerateAdvice,
   onToggleReport,
   reports,
+  symptomDefinitions,
 }) {
   const appointmentByEscalation = new Map(
     appointments.map((appointment) => [appointment.escalation_case, appointment]),
@@ -623,6 +770,7 @@ function ReportHistory({
             onGenerateAdvice={onGenerateAdvice}
             onToggle={() => onToggleReport(report.id)}
             report={report}
+            symptomDefinitions={symptomDefinitions}
           />
         ))}
       </ul>
@@ -640,9 +788,11 @@ function ReportHistoryItem({
   onGenerateAdvice,
   onToggle,
   report,
+  symptomDefinitions,
 }) {
   const reportDate = formatReportDate(report.created_at)
   const reportTime = formatReportTime(report.created_at)
+  const summary = primaryReportSummary(report, symptomDefinitions)
 
   return (
     <li className={`report-accordion-item${isExpanded ? ' is-expanded' : ''}`}>
@@ -655,7 +805,7 @@ function ReportHistoryItem({
         <span>
           <strong>{reportDate}</strong>
           <small>
-            {reportTime} | Day {report.day_after_treatment} | Pain {report.pain_level}/10
+            {reportTime} | Day {report.day_after_treatment} | {summary}
           </small>
         </span>
         <span className="chevron" aria-hidden="true">
@@ -664,28 +814,7 @@ function ReportHistoryItem({
       </button>
       {isExpanded ? (
         <div className="report-accordion-body">
-          <dl className="report-detail-grid">
-            <div>
-              <dt>Pain level</dt>
-              <dd>{report.pain_level}/10</dd>
-            </div>
-            <div>
-              <dt>Swelling</dt>
-              <dd>{formatConstant(report.swelling)}</dd>
-            </div>
-            <div>
-              <dt>Bleeding</dt>
-              <dd>{formatConstant(report.bleeding)}</dd>
-            </div>
-            <div>
-              <dt>Fever</dt>
-              <dd>{formatBoolean(report.fever)}</dd>
-            </div>
-            <div>
-              <dt>Bad smell/taste</dt>
-              <dd>{formatBoolean(report.bad_smell)}</dd>
-            </div>
-          </dl>
+          <ReportSymptomDetails definitions={symptomDefinitions} report={report} />
           {report.notes ? <p className="report-notes">{report.notes}</p> : null}
           <RiskAssessmentSummary
             assessment={report.risk_assessment}
@@ -699,6 +828,23 @@ function ReportHistoryItem({
         </div>
       ) : null}
     </li>
+  )
+}
+
+function ReportSymptomDetails({ definitions, report }) {
+  return (
+    <dl className="report-detail-grid">
+      {reportSymptomEntries(report, definitions).map((entry) => (
+        <div key={entry.key}>
+          <dt>{entry.label}</dt>
+          <dd>
+            {entry.key === 'pain_level' && entry.value !== undefined && entry.value !== null
+              ? `${entry.formattedValue}/10`
+              : entry.formattedValue}
+          </dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 

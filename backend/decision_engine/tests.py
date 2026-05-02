@@ -208,6 +208,53 @@ class DecisionEngineTests(APITestCase):
         self.assertEqual(assessment.recommended_action, RecommendedAction.RECOMMEND_CONTACT)
         self.assertIsNone(assessment.detected_stage)
 
+    def test_dynamic_symptom_key_can_match_rule(self):
+        SymptomDefinition.objects.create(
+            workflow=self.workflow,
+            key="numbness",
+            label="Numbness",
+            data_type=SymptomDataType.BOOLEAN,
+        )
+        dynamic_rule = SymptomRule.objects.create(
+            stage=self.stage_later,
+            name="Numbness reported",
+            condition={"all": [{"field": "numbness", "operator": "=", "value": True}]},
+            risk_level=RiskLevel.HIGH,
+            recommended_action=RecommendedAction.ESCALATE_TO_DENTIST,
+            appointment_priority=AppointmentPriority.HIGH,
+            explanation="Numbness requires staff review.",
+        )
+        report = self.make_report(
+            pain_level=2,
+            swelling="MILD",
+            bad_smell=False,
+            symptom_values={"numbness": True},
+        )
+
+        assessment = assess_report(report)
+
+        self.assertEqual(assessment.risk_level, RiskLevel.HIGH)
+        self.assertEqual(assessment.matched_rules[0]["id"], dynamic_rule.id)
+
+    def test_day_after_treatment_condition_still_matches(self):
+        day_rule = SymptomRule.objects.create(
+            stage=self.stage_later,
+            name="Day four monitoring",
+            condition={
+                "all": [{"field": "day_after_treatment", "operator": ">=", "value": 4}]
+            },
+            risk_level=RiskLevel.WARNING,
+            recommended_action=RecommendedAction.RECOMMEND_CONTACT,
+            appointment_priority=AppointmentPriority.NORMAL,
+            explanation="Day four report should be reviewed if symptoms are uncertain.",
+        )
+        report = self.make_report(pain_level=2, swelling="MILD", bad_smell=False)
+
+        assessment = assess_report(report)
+
+        self.assertEqual(assessment.risk_level, RiskLevel.WARNING)
+        self.assertEqual(assessment.matched_rules[0]["id"], day_rule.id)
+
     def test_duplicate_evaluation_returns_existing_assessment(self):
         report = self.make_report()
 

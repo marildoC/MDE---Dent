@@ -5,7 +5,13 @@ from rest_framework.test import APITestCase
 
 from accounts.models import User, UserRole
 from patients.models import FollowUpCase, FollowUpCaseStatus, PatientProfile
-from workflows.models import TreatmentType, TreatmentWorkflow, WorkflowStatus
+from workflows.models import (
+    SymptomDataType,
+    SymptomDefinition,
+    TreatmentType,
+    TreatmentWorkflow,
+    WorkflowStatus,
+)
 
 from .models import SymptomReport
 
@@ -191,3 +197,112 @@ class SymptomReportTests(APITestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertFalse(SymptomReport.objects.get().image)
+
+    def test_legacy_dynamic_payload_works_without_workflow_symptom_definitions(self):
+        self.client.force_authenticate(self.patient_user)
+
+        response = self.client.post(
+            "/api/reports/symptom-reports/",
+            {
+                "follow_up_case": self.case.id,
+                "symptom_values": {
+                    "pain_level": "3",
+                    "swelling": "MILD",
+                    "bleeding": "NONE",
+                    "fever": "false",
+                    "bad_smell": "false",
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        report = SymptomReport.objects.get(id=response.data["id"])
+        self.assertEqual(report.symptom_values["pain_level"], 3)
+        self.assertEqual(report.pain_level, 3)
+        self.assertEqual(report.swelling, "MILD")
+
+    def test_patient_can_submit_workflow_defined_dynamic_symptoms(self):
+        SymptomDefinition.objects.create(
+            workflow=self.workflow,
+            key="pain_level",
+            label="Pain level",
+            data_type=SymptomDataType.INTEGER,
+            min_value=0,
+            max_value=10,
+        )
+        SymptomDefinition.objects.create(
+            workflow=self.workflow,
+            key="swelling",
+            label="Swelling",
+            data_type=SymptomDataType.CHOICE,
+            allowed_values=["NONE", "MILD", "SEVERE"],
+        )
+        SymptomDefinition.objects.create(
+            workflow=self.workflow,
+            key="numbness",
+            label="Numbness",
+            data_type=SymptomDataType.BOOLEAN,
+        )
+        SymptomDefinition.objects.create(
+            workflow=self.workflow,
+            key="extra_notes",
+            label="Extra notes",
+            data_type=SymptomDataType.TEXT,
+            is_required=False,
+        )
+        self.client.force_authenticate(self.patient_user)
+
+        response = self.client.post(
+            "/api/reports/symptom-reports/",
+            {
+                "follow_up_case": self.case.id,
+                "symptom_values": {
+                    "pain_level": "4",
+                    "swelling": "MILD",
+                    "numbness": "true",
+                    "extra_notes": "Lip feels numb.",
+                },
+                "notes": "Supporting note stays separate.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        report = SymptomReport.objects.get(id=response.data["id"])
+        self.assertEqual(
+            report.symptom_values,
+            {
+                "pain_level": 4,
+                "swelling": "MILD",
+                "numbness": True,
+                "extra_notes": "Lip feels numb.",
+            },
+        )
+        self.assertEqual(report.pain_level, 4)
+        self.assertEqual(report.swelling, "MILD")
+        self.assertEqual(report.bleeding, "NONE")
+        self.assertFalse(report.fever)
+        self.assertFalse(report.bad_smell)
+
+    def test_dynamic_choice_value_must_match_workflow_allowed_values(self):
+        SymptomDefinition.objects.create(
+            workflow=self.workflow,
+            key="swelling",
+            label="Swelling",
+            data_type=SymptomDataType.CHOICE,
+            allowed_values=["NONE", "MILD", "SEVERE"],
+        )
+        self.client.force_authenticate(self.patient_user)
+
+        response = self.client.post(
+            "/api/reports/symptom-reports/",
+            {
+                "follow_up_case": self.case.id,
+                "symptom_values": {"swelling": "MODERATE"},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(SymptomReport.objects.count(), 0)

@@ -64,7 +64,7 @@ class FollowUpCaseViewSet(StaffWritePatientReadMixin, ModelViewSet):
         "patient__user",
         "workflow",
         "assigned_staff",
-    )
+    ).prefetch_related("workflow__symptom_definitions")
     serializer_class = FollowUpCaseSerializer
 
 
@@ -91,6 +91,7 @@ def my_active_case(request):
             "workflow",
             "assigned_staff",
         )
+        .prefetch_related("workflow__symptom_definitions")
         .filter(patient__user=request.user)
         .exclude(status=FollowUpCaseStatus.CLOSED)
         .order_by("-treatment_date", "-id")
@@ -131,6 +132,7 @@ def my_follow_up_cases(request):
             "workflow",
             "assigned_staff",
         )
+        .prefetch_related("workflow__symptom_definitions")
         .filter(patient__user=request.user)
         .exclude(status=FollowUpCaseStatus.CLOSED)
         .order_by("-treatment_date", "-id")

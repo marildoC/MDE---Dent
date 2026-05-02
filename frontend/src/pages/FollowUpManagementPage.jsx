@@ -14,11 +14,13 @@ import { listSymptomReports } from '../api/reports.js'
 import { listWorkflows } from '../api/workflows.js'
 import { useAuth } from '../auth/useAuth.js'
 import {
-  formatBoolean,
   formatConstant,
   formatDateTime,
+  primaryReportSummary,
+  reportSymptomEntries,
   riskClass,
   statusClass,
+  workflowSymptomDefinitions,
 } from '../utils/display.js'
 
 const profileInitial = {
@@ -1007,6 +1009,7 @@ function FollowUpCaseItem({
   reports,
 }) {
   const latest = latestReport(reports)
+  const symptomDefinitions = workflowSymptomDefinitions(caseItem)
 
   return (
     <li className={`accordion-item case-item${isExpanded ? ' is-expanded' : ''}`}>
@@ -1047,6 +1050,7 @@ function FollowUpCaseItem({
             onEvaluate={onEvaluate}
             onGenerateAdvice={onGenerateAdvice}
             reports={reports}
+            symptomDefinitions={symptomDefinitions}
           />
         </div>
       ) : null}
@@ -1062,6 +1066,7 @@ function CaseReportList({
   onEvaluate,
   onGenerateAdvice,
   reports,
+  symptomDefinitions,
 }) {
   if (reports.length === 0) {
     return <small>No symptom reports yet.</small>
@@ -1084,6 +1089,7 @@ function CaseReportList({
             onEvaluate={() => onEvaluate(report.id)}
             onGenerateAdvice={() => onGenerateAdvice(report.risk_assessment.id)}
             report={report}
+            symptomDefinitions={symptomDefinitions}
           />
         </div>
       ))}
@@ -1103,6 +1109,7 @@ function RuntimeReviewPanel({
   onGenerateAdvice,
   report,
   staffReviewControls = null,
+  symptomDefinitions,
 }) {
   const guidance = advice || assessment?.advice_message
   const [isTraceOpen, setIsTraceOpen] = useState(true)
@@ -1110,7 +1117,7 @@ function RuntimeReviewPanel({
   return (
     <div className="runtime-review-panel">
       <RuntimeSection title="Report Input">
-        <ReportInputDetails report={report} />
+        <ReportInputDetails definitions={symptomDefinitions} report={report} />
       </RuntimeSection>
 
       <RuntimeSection title="Decision Result">
@@ -1158,6 +1165,7 @@ function RuntimeReviewPanel({
             assessment={assessment}
             escalation={escalation}
             report={report}
+            symptomDefinitions={symptomDefinitions}
           />
         ) : (
           <small className="muted-text">Trace hidden.</small>
@@ -1179,7 +1187,7 @@ function RuntimeSection({ action = null, children, title }) {
   )
 }
 
-function ReportInputDetails({ report }) {
+function ReportInputDetails({ definitions, report }) {
   if (!report) {
     return <small>Report input is not available.</small>
   }
@@ -1190,26 +1198,16 @@ function ReportInputDetails({ report }) {
         <dt>Report day</dt>
         <dd>{report.day_after_treatment ?? 'Unavailable'}</dd>
       </div>
-      <div>
-        <dt>Pain level</dt>
-        <dd>{report.pain_level ?? 'Unavailable'}/10</dd>
-      </div>
-      <div>
-        <dt>Swelling</dt>
-        <dd>{formatConstant(report.swelling)}</dd>
-      </div>
-      <div>
-        <dt>Bleeding</dt>
-        <dd>{formatConstant(report.bleeding)}</dd>
-      </div>
-      <div>
-        <dt>Fever</dt>
-        <dd>{formatBoolean(report.fever)}</dd>
-      </div>
-      <div>
-        <dt>Bad smell/taste</dt>
-        <dd>{formatBoolean(report.bad_smell)}</dd>
-      </div>
+      {reportSymptomEntries(report, definitions).map((entry) => (
+        <div key={entry.key}>
+          <dt>{entry.label}</dt>
+          <dd>
+            {entry.key === 'pain_level' && entry.value !== undefined && entry.value !== null
+              ? `${entry.formattedValue}/10`
+              : entry.formattedValue}
+          </dd>
+        </div>
+      ))}
       {report.notes ? (
         <div className="runtime-detail-wide">
           <dt>Notes</dt>
@@ -1354,19 +1352,20 @@ function AppointmentDetails({ appointment }) {
   )
 }
 
-function ModelExecutionTrace({ advice, appointment, assessment, escalation, report }) {
+function ModelExecutionTrace({
+  advice,
+  appointment,
+  assessment,
+  escalation,
+  report,
+  symptomDefinitions,
+}) {
   const workflow = report?.follow_up_case_detail?.workflow_detail
   const matchedRules = assessment?.matched_rule_details?.length
     ? assessment.matched_rule_details
     : assessment?.matched_rules || []
   const firstRule = matchedRules[0]
-  const reportValues = report
-    ? `day=${report.day_after_treatment}, pain=${report.pain_level}, swelling=${formatConstant(
-        report.swelling,
-      )}, bleeding=${formatConstant(report.bleeding)}, fever=${formatBoolean(
-        report.fever,
-      )}, bad_smell=${formatBoolean(report.bad_smell)}`
-    : 'Not available'
+  const reportValues = report ? traceReportValues(report, symptomDefinitions) : 'Not available'
 
   return (
     <dl className="runtime-detail-grid">
@@ -1432,6 +1431,13 @@ function ModelExecutionTrace({ advice, appointment, assessment, escalation, repo
       </div>
     </dl>
   )
+}
+
+function traceReportValues(report, definitions) {
+  const entries = reportSymptomEntries(report, definitions).map(
+    (entry) => `${entry.key}=${entry.formattedValue}`,
+  )
+  return [`day=${report.day_after_treatment}`, ...entries].join(', ')
 }
 
 function EscalationQueue({
@@ -1540,6 +1546,8 @@ function EscalationReviewCard({
   const report = escalation.report_detail || {}
   const patient = escalation.patient_detail?.user_detail?.username || 'Unknown patient'
   const workflow = escalation.follow_up_case_detail?.workflow_detail?.name || 'Unknown workflow'
+  const symptomDefinitions = workflowSymptomDefinitions(escalation.follow_up_case_detail)
+  const symptomSummary = primaryReportSummary(report, symptomDefinitions)
   const escalationOptions = statusOptions(
     escalation.status,
     escalationTransitions,
@@ -1556,8 +1564,7 @@ function EscalationReviewCard({
           </strong>
           <small>{workflow}</small>
           <small>
-            Report day {report.day_after_treatment}: pain {report.pain_level}/10, swelling{' '}
-            {formatConstant(report.swelling)}, fever {formatBoolean(report.fever)}
+            Report day {report.day_after_treatment}: {symptomSummary}
           </small>
         </span>
         <span className="case-trigger-actions">
@@ -1591,6 +1598,7 @@ function EscalationReviewCard({
             assessment={escalation.risk_assessment_detail}
             escalation={escalation}
             report={report}
+            symptomDefinitions={symptomDefinitions}
             staffReviewControls={
               <div className="staff-review-controls">
                 <div className="button-row review-actions">

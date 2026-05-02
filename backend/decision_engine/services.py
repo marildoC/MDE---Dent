@@ -22,16 +22,6 @@ RISK_ORDER = {
     RiskLevel.URGENT: 3,
 }
 
-SUPPORTED_FIELDS = {
-    "bad_smell",
-    "bleeding",
-    "day_after_treatment",
-    "fever",
-    "pain_level",
-    "swelling",
-}
-
-
 def assess_report(report):
     report = _report_with_context(report)
     try:
@@ -159,14 +149,17 @@ def _matching_rules(report, stage):
 
 
 def _report_values(report):
-    return {
+    values = {
         "bad_smell": report.bad_smell,
         "bleeding": report.bleeding,
-        "day_after_treatment": report.day_after_treatment,
         "fever": report.fever,
         "pain_level": report.pain_level,
         "swelling": report.swelling,
     }
+    if isinstance(report.symptom_values, dict):
+        values.update(report.symptom_values)
+    values["day_after_treatment"] = report.day_after_treatment
+    return values
 
 
 def _condition_matches(condition, values):
@@ -193,7 +186,7 @@ def _evaluate_item(item, values):
         return _evaluate_group(item, values)
 
     field = item["field"]
-    if field not in SUPPORTED_FIELDS:
+    if field not in values:
         return False
 
     return _compare(values[field], item["operator"], item["value"])

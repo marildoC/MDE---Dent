@@ -20,7 +20,7 @@ class EscalationCaseViewSet(ModelViewSet):
         "patient",
         "patient__user",
         "assigned_staff",
-    )
+    ).prefetch_related("follow_up_case__workflow__symptom_definitions")
 
     def get_serializer_class(self):
         if is_staff_or_admin(self.request.user):

@@ -20,7 +20,7 @@ class AppointmentViewSet(ModelViewSet):
         "escalation_case__risk_assessment__advice_message",
         "risk_assessment",
         "created_by",
-    )
+    ).prefetch_related("follow_up_case__workflow__symptom_definitions")
 
     def get_serializer_class(self):
         if is_staff_or_admin(self.request.user):

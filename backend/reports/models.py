@@ -33,6 +33,7 @@ class SymptomReport(models.Model):
     bleeding = models.CharField(max_length=16, choices=SymptomIntensity.choices)
     fever = models.BooleanField(default=False)
     bad_smell = models.BooleanField(default=False)
+    symptom_values = models.JSONField(default=dict, blank=True)
     notes = models.TextField(blank=True)
     image = models.FileField(upload_to="symptom_reports/", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

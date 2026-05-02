@@ -8,7 +8,7 @@ from accounts.models import User, UserRole
 from audit import actions as audit_actions
 from audit.services import record_audit
 from workflows.models import WorkflowStatus
-from workflows.serializers import TreatmentWorkflowSerializer
+from workflows.serializers import SymptomDefinitionSerializer, TreatmentWorkflowSerializer
 
 from .lifecycle import validate_follow_up_case_transition
 from .models import FollowUpCase, FollowUpCaseStatus, PatientProfile
@@ -106,6 +106,7 @@ def username_part(value):
 class FollowUpCaseSerializer(serializers.ModelSerializer):
     patient_detail = PatientProfileSerializer(source="patient", read_only=True)
     workflow_detail = TreatmentWorkflowSerializer(source="workflow", read_only=True)
+    workflow_symptom_definitions = serializers.SerializerMethodField()
     assigned_staff_detail = PatientUserSerializer(source="assigned_staff", read_only=True)
 
     class Meta:
@@ -116,6 +117,7 @@ class FollowUpCaseSerializer(serializers.ModelSerializer):
             "patient_detail",
             "workflow",
             "workflow_detail",
+            "workflow_symptom_definitions",
             "treatment_date",
             "status",
             "assigned_staff",
@@ -127,10 +129,15 @@ class FollowUpCaseSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "patient_detail",
             "workflow_detail",
+            "workflow_symptom_definitions",
             "assigned_staff_detail",
             "created_at",
             "updated_at",
         )
+
+    def get_workflow_symptom_definitions(self, obj):
+        symptoms = obj.workflow.symptom_definitions.all().order_by("key")
+        return SymptomDefinitionSerializer(symptoms, many=True).data
 
     def validate_workflow(self, workflow):
         if workflow.status != WorkflowStatus.ACTIVE:

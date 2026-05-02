@@ -3,7 +3,13 @@ from datetime import date
 from rest_framework.test import APITestCase
 
 from accounts.models import User, UserRole
-from workflows.models import TreatmentType, TreatmentWorkflow, WorkflowStatus
+from workflows.models import (
+    SymptomDataType,
+    SymptomDefinition,
+    TreatmentType,
+    TreatmentWorkflow,
+    WorkflowStatus,
+)
 
 from .models import FollowUpCase, FollowUpCaseStatus, PatientProfile
 
@@ -337,6 +343,12 @@ class PatientFollowUpRuntimeTests(APITestCase):
         self.assertEqual(case.status, FollowUpCaseStatus.ACTIVE)
 
     def test_my_active_case_returns_own_case_or_null(self):
+        SymptomDefinition.objects.create(
+            workflow=self.active_workflow,
+            key="numbness",
+            label="Numbness",
+            data_type=SymptomDataType.BOOLEAN,
+        )
         profile = PatientProfile.objects.create(user=self.patient_user)
         case = FollowUpCase.objects.create(
             patient=profile,
@@ -353,6 +365,7 @@ class PatientFollowUpRuntimeTests(APITestCase):
         self.assertEqual(case_response.status_code, 200)
         self.assertEqual(case_response.data["id"], case_id)
         self.assertEqual(case_response.data["workflow_detail"]["name"], self.active_workflow.name)
+        self.assertEqual(case_response.data["workflow_symptom_definitions"][0]["key"], "numbness")
         self.assertEqual(null_response.status_code, 200)
         self.assertIsNone(null_response.data)
 

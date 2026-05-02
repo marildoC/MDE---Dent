@@ -20,7 +20,7 @@ class SymptomReportViewSet(ModelViewSet):
         "risk_assessment__advice_message",
         "risk_assessment__detected_stage",
         "submitted_by",
-    )
+    ).prefetch_related("follow_up_case__workflow__symptom_definitions")
 
     def get_queryset(self):
         queryset = super().get_queryset()
