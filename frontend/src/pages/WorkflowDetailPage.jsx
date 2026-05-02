@@ -47,7 +47,8 @@ const emptyBoundary = {
   stage: '',
   allowed_topics: 'aftercare reminders',
   forbidden_topics: 'diagnosis,prescription',
-  required_disclaimer: '',
+  required_disclaimer:
+    'This guidance supports post-treatment follow-up only and does not replace dental diagnosis or prescription. Contact the clinic for worsening or urgent symptoms.',
 }
 const emptyEscalation = {
   symptom_rule: '',
@@ -359,10 +360,23 @@ export default function WorkflowDetailPage() {
     [stages],
   )
 
-  const ruleOptions = useMemo(
-    () => rules.map((rule) => ({ value: rule.id, label: rule.name })),
-    [rules],
-  )
+  const escalationRuleOptions = useMemo(() => {
+    const escalatedRuleIds = new Set(escalations.map((item) => item.symptom_rule))
+    return rules
+      .filter(
+        (rule) =>
+          ['HIGH', 'URGENT'].includes(rule.risk_level) && !escalatedRuleIds.has(rule.id),
+      )
+      .map((rule) => ({
+        appointmentPriority:
+          rule.appointment_priority && rule.appointment_priority !== 'NONE'
+            ? rule.appointment_priority
+            : rule.risk_level,
+        label: `${rule.name} (${formatConstant(rule.risk_level)})`,
+        riskLevel: rule.risk_level,
+        value: rule.id,
+      }))
+  }, [escalations, rules])
 
   const conditionFields = useMemo(() => conditionFieldOptions(symptoms), [symptoms])
 
@@ -822,9 +836,13 @@ export default function WorkflowDetailPage() {
           />
         </Section>
 
-        <Section title="AI Constraints">
+        <Section className="support-builder-panel" title="AI Constraints">
           {isActive ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitBoundary}>
+            <p className="muted-text">
+              Add at least one workflow-level boundary that allows aftercare guidance but forbids
+              diagnosis and prescription.
+            </p>
             <select
               value={boundaryForm.stage}
               onChange={(event) =>
@@ -867,6 +885,7 @@ export default function WorkflowDetailPage() {
             </button>
           </form>
           <ResourceList
+            className="scrollable-resource-list"
             items={boundaries}
             getText={(boundary) =>
               `Boundary ${boundary.id}: forbids ${(boundary.forbidden_topics || [])
@@ -876,18 +895,32 @@ export default function WorkflowDetailPage() {
           />
         </Section>
 
-        <Section title="Staff Escalation Rules">
+        <Section className="support-builder-panel" title="Staff Escalation Rules">
           {isActive ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitEscalation}>
+            <p className="muted-text">
+              Create one staff escalation for every HIGH or URGENT symptom rule.
+            </p>
             <select
               required
               value={escalationForm.symptom_rule}
-              onChange={(event) =>
-                setEscalationForm((current) => ({ ...current, symptom_rule: event.target.value }))
-              }
+              onChange={(event) => {
+                const selectedRule = escalationRuleOptions.find(
+                  (rule) => String(rule.value) === event.target.value,
+                )
+                setEscalationForm((current) => ({
+                  ...current,
+                  appointment_priority: selectedRule?.appointmentPriority || current.appointment_priority,
+                  message:
+                    current.message ||
+                    (selectedRule ? `Staff review required for ${selectedRule.label}.` : ''),
+                  symptom_rule: event.target.value,
+                  urgency: selectedRule?.riskLevel || current.urgency,
+                }))
+              }}
             >
-              <option value="">Select symptom rule</option>
-              {ruleOptions.map((rule) => (
+              <option value="">Select HIGH/URGENT rule needing escalation</option>
+              {escalationRuleOptions.map((rule) => (
                 <option key={rule.value} value={rule.value}>
                   {rule.label}
                 </option>
@@ -941,6 +974,7 @@ export default function WorkflowDetailPage() {
             </button>
           </form>
           <ResourceList
+            className="scrollable-resource-list"
             items={escalations}
             getText={(item) =>
               `${formatConstant(item.target_role)} review: ${formatConstant(

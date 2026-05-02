@@ -114,12 +114,27 @@ function serializeSymptomValues(definitions, values) {
 
 function legacyFieldsFromSymptomValues(values) {
   const fields = {}
-  const legacyKeys = ['pain_level', 'swelling', 'bleeding', 'fever', 'bad_smell']
-  legacyKeys.forEach((key) => {
+  const legacyIntensityValues = new Set(['NONE', 'MILD', 'SEVERE'])
+  const legacyIntensityKeys = ['swelling', 'bleeding']
+  const legacyBooleanKeys = ['fever', 'bad_smell']
+
+  if (Object.prototype.hasOwnProperty.call(values, 'pain_level')) {
+    fields.pain_level = values.pain_level
+  }
+
+  legacyIntensityKeys.forEach((key) => {
+    const value = values[key]
+    if (legacyIntensityValues.has(value)) {
+      fields[key] = value
+    }
+  })
+
+  legacyBooleanKeys.forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(values, key)) {
       fields[key] = values[key]
     }
   })
+
   return fields
 }
 

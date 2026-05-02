@@ -24,6 +24,23 @@ class CurrentUserAPITests(APITestCase):
         self.assertEqual(response.data["username"], "patient1")
         self.assertEqual(response.data["role"], UserRole.PATIENT)
 
+    def test_login_accepts_username_case_insensitively(self):
+        User.objects.create_user(
+            username="marildo",
+            password="testpass123",
+            role=UserRole.PATIENT,
+        )
+
+        response = self.client.post(
+            "/api/auth/login/",
+            {"username": "MARILDO", "password": "testpass123"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+
 
 class RolePermissionTests(APITestCase):
     def setUp(self):

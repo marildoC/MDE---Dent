@@ -347,11 +347,23 @@
   min-height: 0;
 }
 
+.support-builder-panel {
+  display: flex;
+  flex-direction: column;
+  height: 620px;
+  min-height: 0;
+}
+
 .model-builder-panel .panel-form {
   flex: 0 0 auto;
 }
 
-.model-builder-panel .scrollable-resource-list {
+.support-builder-panel .panel-form {
+  flex: 0 0 auto;
+}
+
+.model-builder-panel .scrollable-resource-list,
+.support-builder-panel .scrollable-resource-list {
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
