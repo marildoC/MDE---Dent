@@ -37,6 +37,7 @@
 - The workflow model is the central artifact of the system.
 - The workflow model defines care stages, symptom vocabulary, symptom rules, advice boundaries, and escalation rules.
 - A workflow can be created, validated, activated, and archived.
+- An active or archived workflow can be moved back to `DRAFT` through the explicit Edit lifecycle action.
 - Only an active workflow can be assigned to a patient follow-up case.
 - A follow-up case links a patient profile to a workflow and a treatment date.
 - The active workflow controls runtime behavior through the `FollowUpCase.workflow` relationship.
@@ -56,6 +57,9 @@
 - The workflow model is therefore more important than any single report screen.
 - The runtime engine treats the workflow as a model to interpret.
 - A symptom report acts as an input instance for the active model.
+- The patient symptom report form is generated from the assigned workflow's symptom definitions when definitions exist.
+- Dynamic symptom values are persisted in `SymptomReport.symptom_values`.
+- Legacy fixed symptom fields remain for backward compatibility with older reports and older UI logic.
 - A risk assessment acts as a persisted interpretation result.
 - Advice, escalation, appointment handling, and audit logs act as downstream runtime artifacts.
 
@@ -75,6 +79,10 @@
 - The backend database is SQLite at `backend/db.sqlite3`.
 - The backend API root is organized under `/api/`.
 - Authentication endpoints are registered under `/api/auth/`.
+- The login endpoint uses a custom SimpleJWT token obtain view in `backend/accounts/views.py`.
+- The custom login serializer in `backend/accounts/serializers.py` resolves usernames case-insensitively before authentication.
+- A stored username such as `marildo` can therefore authenticate with `marildo`, `MARILDO`, or `Marildo`.
+- The case-insensitive login behavior does not rename the stored user.
 - Workflow endpoints are registered under `/api/workflows/`.
 - Patient and follow-up case endpoints are registered under `/api/patients/`.
 - Symptom report endpoints are registered under `/api/reports/`.
@@ -137,11 +145,15 @@
 - The admin role can validate workflows through `/api/workflows/treatment-workflows/{id}/validate/`.
 - The admin role can activate validated workflows through `/api/workflows/treatment-workflows/{id}/activate/`.
 - The admin role can archive active workflows through `/api/workflows/treatment-workflows/{id}/archive/`.
+- The admin role can move an active or archived workflow back to draft through `/api/workflows/treatment-workflows/{id}/edit/`.
+- The edit lifecycle action is explicit; it prevents accidental direct changes to locked workflow states.
 - The admin role can view workflow DSL preview text through `/dsl-preview/`.
 - The admin role can view structured workflow validation checks through `/validation-report/`.
-- The admin role can create care stages, symptom definitions, symptom rules, advice boundaries, and escalation rules.
+- The admin role can create care stages, symptom definitions, symptom rules, advice boundaries, and escalation rules while the workflow is editable.
+- Active and archived workflows are locked in the frontend until the admin presses Edit.
 - Active workflows cannot be edited directly by the workflow viewsets.
 - The active-workflow edit protection is implemented in `AdminWorkflowViewSet._ensure_workflow_can_be_edited`.
+- After Edit moves a workflow back to `DRAFT`, the same validate and activate flow is used again.
 - The admin role can create patient profiles through the current frontend follow-up page.
 - The admin role can create patient profiles with new patient users through `/api/patients/profiles/create-with-user/`.
 - The admin role can assign active workflows to follow-up cases.
@@ -175,6 +187,8 @@
 - Patients can see the latest non-closed active case through `/api/patients/my-active-case/`.
 - Patients can switch between multiple available non-closed cases in the frontend.
 - Patients can submit symptom reports for their own reportable follow-up cases.
+- The patient symptom report form is generated from `workflow_symptom_definitions` included in the follow-up case response.
+- If workflow symptom definitions are unavailable, the frontend falls back to legacy symptom definitions from `frontend/src/utils/display.js`.
 - The backend validates that the report belongs to the submitting patient.
 - The backend rejects patient reports for another patient's case.
 - The backend rejects reports for non-reportable cases through `validate_reportable_case`.
@@ -223,7 +237,11 @@
 - `SymptomDefinition.min_value` and `max_value` exist in the backend model.
 - The current workflow detail form does not visibly expose min and max value inputs.
 - `SymptomDefinition.is_required` marks whether the symptom is required in the model.
-- The current runtime report schema is fixed and does not dynamically generate report fields from all symptom definitions.
+- The current runtime report form is dynamically generated from workflow symptom definitions.
+- `SymptomReport.symptom_values` stores the dynamic input values as JSON.
+- The fixed report fields `pain_level`, `swelling`, `bleeding`, `fever`, and `bad_smell` are still present for backward compatibility.
+- Legacy fixed fields are populated only when submitted workflow values are compatible with their old field constraints.
+- Workflow-specific values such as `MODERATE`, `HEAVY`, or `SPOTTING` remain in `symptom_values` when the old fixed field cannot accept them.
 - `SymptomRule.stage` attaches a rule to exactly one care stage.
 - `SymptomRule.condition` is structured JSON.
 - `SymptomRule.risk_level` can be `LOW`, `WARNING`, `HIGH`, or `URGENT`.
@@ -248,7 +266,8 @@
 - Execution semantics are represented by `assess_report`.
 - Model transformation is implemented by the report submission and assessment flow.
 - The transformation input is a `FollowUpCase`, an active `TreatmentWorkflow`, and a `SymptomReport`.
-- The transformation output includes `RiskAssessment`, `AdviceMessage`, optional `EscalationCase`, optional `Appointment`, and `AuditLog` records.
+- The immediate transformation output includes `RiskAssessment`, `AdviceMessage`, optional `EscalationCase`, and `AuditLog` records.
+- Appointment records can be created later by staff/admin from an escalation context.
 - The system is an internal DSL because users configure domain concepts instead of writing general code.
 - The system is MDE-oriented because the configured model controls runtime behavior.
 - The system is not an external textual DSL implementation.
@@ -273,11 +292,15 @@
 - The workflow detail page filters escalation rules by rule ids belonging to the workflow.
 - The workflow detail page filters advice boundaries by workflow id.
 - The workflow detail page loads the validation report on entry.
-- The workflow section allows editing the workflow name and description when the workflow is not active.
-- The workflow section has lifecycle controls for validate, activate, and archive.
+- The workflow section allows editing the workflow name and description when the workflow is not locked.
+- A workflow is locked in the frontend when its status is `ACTIVE` or `ARCHIVED`.
+- The workflow section has lifecycle controls for validate, edit, activate, and archive.
 - Validate calls `validateWorkflow`.
+- Edit calls `editWorkflow`.
 - Activate calls `activateWorkflow`.
 - Archive calls `archiveWorkflow`.
+- Edit is enabled in the frontend when the workflow status is `ACTIVE` or `ARCHIVED`.
+- Edit moves the workflow back to `DRAFT` through the backend lifecycle action.
 - Activate is disabled in the frontend unless the status is `VALIDATED`.
 - Archive is disabled in the frontend unless the status is `ACTIVE`.
 - Backend lifecycle checks remain authoritative even if a user bypasses frontend controls.
@@ -300,8 +323,22 @@
 - The validation service also checks uniqueness.
 - The symptom rule section creates rules attached to a selected stage.
 - A rule name identifies the clinical scenario.
-- A rule condition is entered as JSON in the frontend.
-- The frontend parses the condition with `JSON.parse` before sending it.
+- A rule condition is built through a visual condition builder in the frontend.
+- The normal builder supports one top-level logical group: `all` or `any`.
+- `Match all conditions` generates a backend condition object with an `all` array.
+- `Match any condition` generates a backend condition object with an `any` array.
+- Each condition row has a field dropdown, operator dropdown, typed value input, and remove button.
+- The field dropdown is generated from current workflow symptom definitions plus the synthetic field `day_after_treatment`.
+- Human-facing dropdown labels show both the label and backend key, such as `Pain level (pain_level)`.
+- The saved condition field is the backend key, not the human label.
+- Integer fields use numeric inputs and numeric operators.
+- Boolean fields use yes/no controls and equality operators.
+- Choice fields use configured `allowed_values` when available.
+- Text fields use text input.
+- The frontend shows a condition preview such as `pain_level >= 5 AND pain_level < 8`.
+- The frontend sends the same structured condition JSON object that the backend already validates and evaluates.
+- The normal UI does not implement nested group editing.
+- Existing nested condition JSON can remain represented by formatted condition text when returned by the backend.
 - The backend validates condition shape through `validate_condition_shape`.
 - The condition must contain exactly one logical group, either `all` or `any`.
 - Logical groups contain condition items.
@@ -311,9 +348,11 @@
 - The recommended action determines the main action persisted to the risk assessment.
 - The rule explanation becomes the risk assessment explanation when the rule is selected.
 - The backend model supports `appointment_priority` on a symptom rule.
-- The current workflow detail form initializes `appointment_priority` to `HIGH` for a new rule.
-- The current workflow detail form displays appointment priority in the resource list.
-- The current workflow detail form does not visibly render a separate appointment priority selector in the rule form.
+- The workflow detail form visibly renders `Rule appointment priority`.
+- New symptom rules default to appointment priority `NONE`.
+- The admin can explicitly choose `NONE`, `LOW`, `NORMAL`, `HIGH`, or `URGENT`.
+- If a symptom rule wins during assessment, its appointment priority is copied to `RiskAssessment.appointment_priority`.
+- Staff escalation appointment priority is configured separately in the staff escalation rule section.
 - Multiple rules can model different clinical scenarios within one stage.
 - Multiple stages can have different rules for different recovery periods.
 - The decision engine later evaluates only the rules for the detected stage.
@@ -336,6 +375,8 @@
 - Escalation rules are configured in the workflow detail page under staff escalation rules.
 - Each escalation rule is attached to one symptom rule.
 - The current frontend escalation form selects the symptom rule.
+- The current frontend escalation rule dropdown filters to `HIGH` and `URGENT` rules that still need escalation behavior.
+- Selecting a high or urgent rule fills urgency and appointment priority with sensible defaults from the selected rule or risk level.
 - The current frontend escalation form sets target role from the default `DENTIST`.
 - The current frontend escalation form displays urgency and appointment priority controls.
 - The current frontend escalation form stores a required message.
@@ -347,10 +388,13 @@
 - Current runtime escalation creation does not load `EscalationRule.message`.
 - Current runtime escalation creation does not load `EscalationRule.target_role`.
 - Current runtime appointment priority comes from `RiskAssessment.appointment_priority`, with fallback in appointment creation.
+- The workflow detail page uses scrollable resource lists for long symptoms, symptom rules, advice boundaries, and escalation rules.
+- The scrollable lists are a frontend usability feature and do not affect model semantics.
 - Using `EscalationRule.message` and `target_role` at runtime is not implemented / future work.
 - The static semantics panel shows validation checks returned by the backend.
 - The execution semantics panel summarizes how the workflow model will be interpreted at runtime.
-- Active workflows display a notice that direct edits are protected.
+- Active and archived workflows display a notice that they are locked.
+- Pressing Edit moves a locked workflow back to draft for changes.
 
 ## 6. Static Semantics And Validation
 - Static semantics are implemented in `validate_workflow` in `backend/workflows/services.py`.
@@ -408,6 +452,9 @@
 - `workflow_can_be_activated` fails when prior validation errors exist.
 - `workflow_can_be_activated` is not added as an extra error message.
 - A draft workflow can move to `VALIDATED` only if validation passes.
+- An archived workflow can also move to `VALIDATED` if validation passes.
+- An active or archived workflow can move to `DRAFT` through the explicit Edit action.
+- The Edit action is implemented by `TreatmentWorkflowViewSet.edit`.
 - A workflow can move to `ACTIVE` only from `VALIDATED`.
 - Activation re-runs validation before changing status.
 - A stale validated workflow can fail activation if the model became invalid after validation.
@@ -419,11 +466,9 @@
 - Static semantics do not create escalations.
 - Static semantics do not create appointments.
 - Static semantics provide the activation gate for the internal DSL.
-- Runtime limitation: validation can accept any defined symptom key.
-- Runtime limitation: the decision engine currently evaluates only hardcoded `SymptomReport` fields.
-- The supported runtime fields are `bad_smell`, `bleeding`, `day_after_treatment`, `fever`, `pain_level`, and `swelling`.
-- A custom symptom key outside those runtime fields can be validated if defined, but it will not match at runtime.
-- Dynamic report-field generation from arbitrary symptom definitions is not implemented / future work.
+- Validation can accept any defined symptom key because workflow-defined symptoms are now runtime report fields.
+- The decision engine evaluates dynamic `symptom_values` together with legacy fixed fields and `day_after_treatment`.
+- A custom symptom key such as `numbness`, `visible_bone`, or `pus_discharge` can match at runtime if it is defined by the workflow and submitted by the patient.
 
 ## 7. Execution Semantics
 - Execution semantics are implemented by `assess_report` in `backend/decision_engine/services.py`.
@@ -451,7 +496,12 @@
 - The no-stage fallback explanation tells the patient to contact the clinic.
 - If a stage is detected, the engine selects symptom rules for that stage only.
 - Rules from other stages are not considered.
-- The report values map contains `bad_smell`, `bleeding`, `day_after_treatment`, `fever`, `pain_level`, and `swelling`.
+- The report values map starts with legacy fixed fields.
+- Legacy fixed fields include `bad_smell`, `bleeding`, `fever`, `pain_level`, and `swelling`.
+- If `report.symptom_values` is a dictionary, the decision engine merges those dynamic values into the report values map.
+- Dynamic `symptom_values` override same-named legacy fixed values in the runtime value map.
+- The engine then adds `day_after_treatment`.
+- Rules can therefore reference legacy fields, dynamic workflow symptom keys, and `day_after_treatment`.
 - The engine validates each rule condition shape before evaluating it.
 - Malformed rule conditions do not crash evaluation.
 - Malformed rule conditions simply do not match.
@@ -473,6 +523,11 @@
 - The no-rule fallback recommended action is `CONTINUE_MONITORING`.
 - The no-rule fallback appointment priority is `NONE`.
 - The no-rule fallback explanation states that no symptom rule matched in the detected stage.
+- The no-rule fallback is deterministic but clinically conservative only to the extent that the workflow contains adequate safety-net rules.
+- A severe symptom such as pain level 10 can fall back to `LOW` if no rule in the detected stage matches that symptom.
+- Robust workflow design should include stage-level red-flag rules for single dangerous symptoms such as severe pain, heavy bleeding, fever, discharge, visible bone, lost clot, breathing difficulty, or persistent numbness.
+- Workflow authors should not model every possible symptom combination.
+- Workflow authors should combine broad safety-net rules with more specific combination rules.
 - If rules match, the selected rule is the rule with the highest severity.
 - Severity order is `LOW`, `WARNING`, `HIGH`, `URGENT`.
 - If multiple rules have equal severity, Python `max` returns the first one encountered in the ordered list.
@@ -557,12 +612,16 @@
 - The backend returns the patient's non-closed follow-up cases.
 - The patient selects or switches between available cases in the frontend.
 - The patient fills a symptom report form.
-- The implemented report fields are pain level, swelling, bleeding, fever, bad smell/taste, notes, and optional image.
-- Pain level is numeric from zero to ten.
-- Swelling uses `NONE`, `MILD`, or `SEVERE`.
-- Bleeding uses `NONE`, `MILD`, or `SEVERE`.
-- Fever is boolean.
-- Bad smell or taste is boolean.
+- The implemented report fields are the workflow-defined symptom fields plus separate notes and optional image evidence.
+- The patient report form is generated from the assigned workflow's symptom definitions.
+- A workflow with five symptom definitions produces five symptom inputs.
+- A workflow with twelve symptom definitions produces twelve symptom inputs.
+- Integer symptoms are submitted as numbers.
+- Boolean symptoms are submitted as true/false values from yes/no controls.
+- Choice symptoms are submitted as one of the workflow's configured `allowed_values`.
+- Choice values are not limited to legacy `NONE`, `MILD`, and `SEVERE` unless those are the configured values.
+- Text symptoms are submitted as strings.
+- The frontend keeps notes and image evidence separate from dynamic symptom values.
 - Notes are optional text.
 - Image evidence is optional file upload.
 - The frontend submits the report as `FormData`.
@@ -570,7 +629,15 @@
 - The backend verifies the user role is `PATIENT`.
 - The backend verifies the follow-up case belongs to the patient.
 - The backend verifies the case is reportable.
+- The backend validates `symptom_values` against the workflow's symptom definitions.
+- The backend rejects symptom keys not defined by the assigned workflow.
+- The backend validates integer values, including min and max where configured.
+- The backend normalizes boolean values from safe frontend representations.
+- The backend validates choice values against `allowed_values` when allowed values are defined.
+- The backend accepts text values as strings.
 - The backend creates `SymptomReport`.
+- The backend stores dynamic symptom values in `SymptomReport.symptom_values`.
+- The backend also keeps legacy fixed fields populated where the dynamic values are compatible with legacy constraints.
 - The backend computes `day_after_treatment`.
 - The backend records `SYMPTOM_REPORT_SUBMITTED`.
 - The backend runs `assess_report`.
@@ -598,8 +665,11 @@
 - The engine uses `detect_stage` to find the care stage for the report day.
 - The engine uses `_matching_rules` to filter matching rules for the detected stage.
 - The engine uses `_report_values` to expose report fields to conditions.
-- The runtime report fields are hardcoded in `SUPPORTED_FIELDS`.
-- `SUPPORTED_FIELDS` contains `bad_smell`, `bleeding`, `day_after_treatment`, `fever`, `pain_level`, and `swelling`.
+- `_report_values` exposes legacy fixed fields for backward compatibility.
+- `_report_values` then merges dynamic `SymptomReport.symptom_values`.
+- `_report_values` adds `day_after_treatment` as a synthetic runtime field.
+- There is no longer a runtime-only fixed `SUPPORTED_FIELDS` list limiting rules to the five legacy symptoms.
+- Workflow-defined symptom keys can be evaluated when they are stored in `symptom_values`.
 - The condition structure is limited to nested `all` and `any` groups.
 - A condition leaf has `field`, `operator`, and `value`.
 - The allowed operators are exactly those accepted by workflow validation.
@@ -622,6 +692,9 @@
 - The no-stage fallback is safer than the no-rule fallback.
 - The no-stage fallback asks the patient to contact the clinic.
 - The no-rule fallback asks the patient to continue monitoring.
+- The no-rule fallback makes workflow safety-net rule design important.
+- The workflow should include broad high/urgent rules for symptoms that should never fall through to low risk.
+- This is a modeling responsibility, not a reason to enumerate every possible symptom combination.
 - Duplicate evaluation returns the existing assessment.
 - Duplicate evaluation can repair missing downstream advice or escalation.
 - Decision trace is persisted in `RiskAssessment`.
@@ -629,7 +702,9 @@
 - Audit trace is persisted separately in `AuditLog`.
 - The decision engine is deterministic.
 - The same saved report and same workflow model produce the same assessment unless the underlying workflow rules are changed before assessment.
-- Active workflow editing is blocked to reduce runtime inconsistency.
+- Active and archived workflows can be moved back to draft through Edit.
+- Editing the same workflow record can affect future assessments for cases assigned to that workflow.
+- Existing assessments are not automatically recomputed after workflow edit and reactivation.
 - Existing assessments are not recomputed automatically when a workflow changes.
 - Reassessment behavior for changed historical workflows is not implemented / future work.
 
@@ -639,7 +714,11 @@
 - `SymptomReport` links to `FollowUpCase`.
 - `SymptomReport` links to the submitting user.
 - `SymptomReport` stores `day_after_treatment`.
-- `SymptomReport` stores pain level, swelling, bleeding, fever, bad smell, notes, and optional image.
+- `SymptomReport` stores legacy fields for pain level, swelling, bleeding, fever, and bad smell.
+- `SymptomReport` stores dynamic workflow symptom input in `symptom_values`.
+- `SymptomReport` stores notes and optional image evidence separately.
+- `SymptomReport.symptom_values` is the main runtime input for workflow-defined custom symptoms.
+- The legacy fixed fields support old reports and compatibility with old display logic.
 - `SymptomReport` supports traceability by preserving the input instance used by the model interpreter.
 - `RiskAssessment` exists to persist the decision engine output.
 - `RiskAssessment` is created by `assess_report`.
@@ -754,6 +833,8 @@
 ## 13. DSL And MDE Interpretation
 - DentCare-MDE is DSL-oriented because it exposes domain-specific vocabulary.
 - The vocabulary includes workflow, treatment type, care stage, symptom, symptom rule, advice boundary, escalation rule, risk level, recommended action, and appointment priority.
+- The workflow symptom vocabulary directly drives the patient report form.
+- Dynamic patient inputs are therefore generated from the workflow model, not from a generic static survey.
 - Users configure this vocabulary through forms instead of writing general code.
 - The workflow model has limited expressiveness by design.
 - The condition language supports only `all`, `any`, field comparisons, and a fixed operator set.
@@ -774,6 +855,7 @@
 - Execution semantics are implemented by runtime interpretation of reports.
 - Runtime interpretation uses the model to select stages and evaluate rules.
 - Model-to-runtime transformation begins with the workflow model and report instance.
+- The current transformation chain is `SymptomDefinition` to dynamic input control to `SymptomReport.symptom_values` to decision-engine value map to matched rule.
 - Model-to-runtime transformation produces a risk assessment.
 - Model-to-runtime transformation produces bounded advice.
 - Model-to-runtime transformation can produce escalation.
@@ -823,9 +905,12 @@
 - The system does not let patients update appointments.
 - The system does not have an external textual DSL parser.
 - The system does not parse the generated DSL preview back into model objects.
-- The system does not dynamically create patient report forms from arbitrary symptom definitions.
-- The current patient report form is fixed to pain, swelling, bleeding, fever, bad smell, notes, and image.
-- The current decision engine is fixed to the same report fields plus day after treatment.
+- The system does not allow patients to choose which workflow model controls their report form.
+- The system does not allow patient-defined custom symptoms.
+- Dynamic patient report fields come only from admin-defined workflow symptom definitions.
+- The system does not treat every unmatched symptom combination as high risk automatically.
+- If no rule matches inside a detected stage, the implemented fallback is `LOW`.
+- Workflow authors must create safety-net rules for dangerous single symptoms and important clinical combinations.
 - The system does not automatically create appointment objects after a high or urgent report.
 - The system creates escalation cases automatically for high and urgent assessments.
 - Staff/admin must create appointment records through the appointment workflow.
@@ -916,12 +1001,37 @@
 - Example D if status is manually stale `VALIDATED`, activation re-runs validation and still fails.
 - Example D static semantics panel shows failed checks and messages.
 - Example D no patient case should be assigned to that workflow because only active workflows can be assigned.
+- Example E begins with a valid active workflow assigned to a patient.
+- Example E patient submits a report in stage `S2`.
+- Example E patient reports pain level 10.
+- Example E assumes no `S2` symptom rule matches `pain_level >= 8` or `pain_level >= 10`.
+- Example E decision engine detects `S2`.
+- Example E decision engine evaluates only `S2` rules.
+- Example E no rule matches because the workflow lacks a safety-net severe-pain rule for that stage.
+- Example E creates the implemented no-rule fallback assessment.
+- Example E fallback risk is `LOW`.
+- Example E fallback action is `CONTINUE_MONITORING`.
+- Example E fallback explanation says no symptom rule matched in the detected stage.
+- Example E demonstrates that the system does not infer clinical danger from values unless the workflow model contains a matching rule.
+- Example E should be used in reports as a modeling-quality lesson, not as a desired clinical outcome.
+- Example E correction is to add broad safety-net rules such as `pain_level >= 8`, `bleeding = HEAVY`, `fever = true`, `pus_discharge = true`, `visible_bone = true`, and `difficulty_swallowing = true`.
+- Example E does not require enumerating every symptom combination.
+- Example E requires a small set of high/urgent single-symptom rules plus targeted combination rules.
+- Example F begins with an active or archived workflow that needs adjustment.
+- Example F admin presses Edit.
+- Example F workflow status becomes `DRAFT`.
+- Example F admin modifies symptoms, rules, advice boundaries, or escalation rules.
+- Example F admin runs validation.
+- Example F validation passes and status becomes `VALIDATED`.
+- Example F admin activates the workflow again.
+- Example F existing future reports for assigned cases can use the updated model.
+- Example F historical assessments are not automatically recomputed.
 
 ## 16. Diagram Preparation Notes
 - Do not create diagrams from this document yet.
 - Use this section only to prepare diagram content later.
 - Use Case Diagram should include actors Admin, Dentist/Staff, and Patient.
-- Use Case Diagram should include Admin workflow management, validation, activation, archive, patient profile creation, follow-up case creation, Admin Intelligence, and audit review.
+- Use Case Diagram should include Admin workflow management, validation, edit, activation, archive, patient profile creation, follow-up case creation, Admin Intelligence, and audit review.
 - Use Case Diagram should include Dentist/Staff case review, escalation review, appointment creation/update, and report/risk review.
 - Use Case Diagram should include Patient dashboard, symptom report submission, advice view, escalation status view, and appointment view.
 - Use Case Diagram should not include internal model classes as actors.
@@ -933,13 +1043,16 @@
 - Activity Diagram should not include Admin Intelligence unless making a separate activity diagram.
 - State Diagram should model `TreatmentWorkflow` lifecycle.
 - Workflow State Diagram should include `DRAFT`, `VALIDATED`, `ACTIVE`, and `ARCHIVED`.
-- Workflow State Diagram should show validate, activate, and archive transitions.
+- Workflow State Diagram should show validate, edit, activate, and archive transitions.
+- The edit transition moves `ACTIVE` or `ARCHIVED` back to `DRAFT`.
 - A second State Diagram could model `FollowUpCaseStatus`.
 - Follow-up Case State Diagram should include created, active, monitoring, guidance, escalated, appointment required, resolved, and closed.
 - A third State Diagram could model `EscalationStatus`.
 - Collaboration Diagram should show patient, frontend, report API, decision engine service, advice service, escalation service, appointment service, and audit service.
 - Collaboration Diagram should focus on object interactions, not UI styling.
 - Sequence Diagram should show patient symptom submission from React to DRF to serializer to report save to decision engine to advice and escalation services.
+- Sequence Diagram should show dynamic symptom values being submitted as `symptom_values`.
+- Sequence Diagram should show serializer validation against workflow symptom definitions.
 - Sequence Diagram should include persisted objects and audit logs.
 - Sequence Diagram should show appointment creation as a later staff/admin sequence, not automatic report submission.
 - DFD Diagram should include data stores for users, workflows, patient profiles, follow-up cases, symptom reports, risk assessments, advice messages, escalation cases, appointments, and audit logs.
@@ -947,6 +1060,8 @@
 - DFD Diagram should show Admin Intelligence as a read-only query process.
 - DFD Diagram should not show external LLM services because none are implemented.
 - Class Diagram should include User, PatientProfile, TreatmentWorkflow, CareStage, SymptomDefinition, SymptomRule, AIAdviceBoundary, EscalationRule, FollowUpCase, SymptomReport, RiskAssessment, AdviceMessage, EscalationCase, Appointment, and AuditLog.
+- Class Diagram should show `SymptomReport.symptom_values` as the dynamic value container.
+- Class Diagram should show legacy fixed fields on `SymptomReport` as compatibility attributes.
 - Class Diagram should show one-to-one, one-to-many, and foreign-key relationships.
 - Class Diagram should show enum-like status and choice fields as attributes or notes.
 - Class Diagram should not include every serializer unless specifically required.
@@ -961,6 +1076,7 @@
 - If a proxy sequence is required, show frontend requesting backend, backend permission checks, and service access, while stating this is an access-control boundary rather than an implemented GoF Proxy.
 - Object Diagram should use one concrete runtime scenario.
 - Object Diagram should show one active workflow, one stage, one symptom rule, one patient profile, one follow-up case, one symptom report, one risk assessment, one advice message, one escalation case, and optionally one appointment.
+- Object Diagram should include concrete dynamic symptom values inside the `SymptomReport` object.
 - Object Diagram should include object ids only as examples, not fixed values.
 - Package Diagram should group backend apps by package: accounts, workflows, patients, reports, decision_engine, ai_support, escalations, appointments, audit, and admin_intelligence.
 - Package Diagram should group frontend packages by api, auth, components, pages, and utils.
@@ -976,7 +1092,9 @@
 ## 17. Code Reference Index
 - `backend/accounts/models.py` defines `UserRole` and the custom `User`.
 - `backend/accounts/permissions.py` defines role-based permission helpers.
-- `backend/accounts/urls.py` exposes login, token refresh, and current-user endpoints.
+- `backend/accounts/serializers.py` defines the current-user serializer and the case-insensitive SimpleJWT login serializer.
+- `backend/accounts/views.py` defines the current-user endpoint and the case-insensitive token obtain view.
+- `backend/accounts/urls.py` exposes case-insensitive login, token refresh, and current-user endpoints.
 - `backend/core/settings.py` configures installed apps, JWT authentication, SQLite, CORS, media, and custom user model.
 - `backend/core/urls.py` mounts the app API routes.
 - `backend/workflows/models.py` defines the workflow DSL abstract syntax.
@@ -988,8 +1106,8 @@
 - `backend/patients/lifecycle.py` defines follow-up case transitions and synchronization.
 - `backend/patients/serializers.py` validates profile creation, active workflow assignment, and case transitions.
 - `backend/patients/views.py` controls staff/admin writes and patient read scope.
-- `backend/reports/models.py` defines the structured symptom report input.
-- `backend/reports/serializers.py` validates patient report submission and triggers assessment.
+- `backend/reports/models.py` defines structured symptom reports, legacy fixed fields, and dynamic `symptom_values`.
+- `backend/reports/serializers.py` validates patient report submission, workflow-defined dynamic symptom values, legacy compatibility fields, and triggers assessment.
 - `backend/reports/views.py` restricts report creation to patients and prevents update/delete.
 - `backend/decision_engine/models.py` defines the persisted risk assessment.
 - `backend/decision_engine/services.py` implements runtime workflow interpretation.
@@ -1016,25 +1134,32 @@
 - `frontend/src/auth/AuthContext.jsx` manages login, logout, current user, and local token storage.
 - `frontend/src/components/ProtectedRoute.jsx` enforces frontend route role checks.
 - `frontend/src/pages/WorkflowListPage.jsx` creates workflows and displays list-level DSL previews.
-- `frontend/src/pages/WorkflowDetailPage.jsx` edits workflow model elements and shows static/execution semantics panels.
+- `frontend/src/pages/WorkflowDetailPage.jsx` edits workflow model elements, implements the visual condition builder, exposes workflow lifecycle actions, and shows static/execution semantics panels.
 - `frontend/src/pages/Dashboards.jsx` implements patient, staff, and admin dashboard surfaces.
 - `frontend/src/pages/FollowUpManagementPage.jsx` implements staff/admin runtime follow-up management.
 - `frontend/src/pages/AuditLogPage.jsx` implements Admin Intelligence UI.
-- `frontend/src/utils/display.js` formats constants, booleans, dates, statuses, risks, and detail keys.
+- `frontend/src/utils/display.js` formats constants, booleans, dates, statuses, risks, dynamic symptom entries, and legacy fallback symptom definitions.
 
 ## 18. Implementation Uncertainties And Limitations Found
 - The project contains strong workflow-model behavior, but it is implemented as an internal Django model DSL rather than an external DSL parser.
 - The generated DSL preview is display-only.
-- Runtime rule evaluation currently supports only fixed report fields.
-- Arbitrary symptom definitions do not automatically extend the patient report schema.
+- Runtime rule evaluation supports fixed legacy fields, dynamic workflow symptom values, and `day_after_treatment`.
+- Workflow symptom definitions now extend the patient report schema through the generated patient report form.
+- The dynamic report form is still bounded by admin-defined workflow symptom definitions.
 - `EscalationRule` is important to validation and DSL preview.
 - `EscalationRule` fields are not fully consumed by runtime escalation creation.
+- The staff escalation form filters high/urgent rules needing escalation, but runtime escalation creation still uses the final risk assessment rather than loading the configured escalation rule message or target role.
 - Advice generation uses templates only.
 - Advice generation does not use an LLM.
 - Advice generation does not use `allowed_topics` to select message content.
 - Advice generation uses the required disclaimer if safe.
 - Appointment creation is staff/admin initiated after escalation.
 - Appointment creation is not automatic during report assessment.
+- Editing an active or archived workflow moves the same workflow record back to draft.
+- The system does not implement workflow version cloning.
+- Existing follow-up cases assigned to that workflow can be affected by future reactivation of the edited workflow.
+- Existing risk assessments are not automatically recomputed when a workflow is edited.
+- The no-rule fallback is `LOW`; robust clinical workflow design requires safety-net rules for dangerous symptoms.
 - Admin Intelligence is a deterministic operational assistant.
 - Admin Intelligence is not the workflow DSL engine.
 - Admin Intelligence is not a medical assistant.
