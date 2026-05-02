@@ -74,6 +74,13 @@ export function archiveWorkflow(id) {
   })
 }
 
+export function editWorkflow(id) {
+  return api(`/workflows/treatment-workflows/${id}/edit/`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
 export function listCareStages() {
   return api('/workflows/care-stages/')
 }

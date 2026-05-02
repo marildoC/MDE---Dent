@@ -8,6 +8,7 @@ import {
   createEscalationRule,
   createSymptomDefinition,
   createSymptomRule,
+  editWorkflow,
   getWorkflow,
   getWorkflowValidationReport,
   listAdviceBoundaries,
@@ -247,7 +248,7 @@ function Section({ className = '', title, children }) {
 function ActiveWorkflowNotice() {
   return (
     <p className="state-note">
-      This workflow is active. Version 1 protects active workflow structures from direct edits.
+      This workflow is locked. Press Edit to move it back to draft before changing it.
     </p>
   )
 }
@@ -464,6 +465,10 @@ export default function WorkflowDetailPage() {
     runLifecycleAction(() => archiveWorkflow(workflowId))
   }
 
+  const handleEdit = () => {
+    runLifecycleAction(() => editWorkflow(workflowId))
+  }
+
   const submitWorkflow = (event) => {
     event.preventDefault()
     submitAndReload(() => updateWorkflow(workflowId, workflowForm))
@@ -547,7 +552,7 @@ export default function WorkflowDetailPage() {
     )
   }
 
-  const isActive = workflow.status === 'ACTIVE'
+  const isLocked = ['ACTIVE', 'ARCHIVED'].includes(workflow.status)
 
   return (
     <main className="app-shell">
@@ -574,10 +579,18 @@ export default function WorkflowDetailPage() {
       <div className="workflow-grid">
         <Section title="Workflow">
           <div className="lifecycle-panel">
-            {isActive ? <ActiveWorkflowNotice /> : null}
+            {isLocked ? <ActiveWorkflowNotice /> : null}
             <div className="button-row">
               <button className="primary-button" type="button" onClick={handleValidate}>
                 Validate
+              </button>
+              <button
+                className="secondary-button"
+                disabled={!isLocked}
+                type="button"
+                onClick={handleEdit}
+              >
+                Edit
               </button>
               <button
                 className="secondary-button"
@@ -601,7 +614,7 @@ export default function WorkflowDetailPage() {
             <label>
               Name
               <input
-                disabled={isActive}
+                disabled={isLocked}
                 name="name"
                 onChange={(event) =>
                   setWorkflowForm((current) => ({ ...current, name: event.target.value }))
@@ -613,7 +626,7 @@ export default function WorkflowDetailPage() {
             <label>
               Description
               <textarea
-                disabled={isActive}
+                disabled={isLocked}
                 name="description"
                 onChange={(event) =>
                   setWorkflowForm((current) => ({
@@ -624,14 +637,14 @@ export default function WorkflowDetailPage() {
                 value={workflowForm.description}
               />
             </label>
-            <button className="primary-button" disabled={isActive} type="submit">
+            <button className="primary-button" disabled={isLocked} type="submit">
               Save workflow
             </button>
           </form>
         </Section>
 
         <Section title="Care Stages">
-          {isActive ? <ActiveWorkflowNotice /> : null}
+          {isLocked ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitStage}>
             <input
               placeholder="Name"
@@ -668,7 +681,7 @@ export default function WorkflowDetailPage() {
                 setStageForm((current) => ({ ...current, description: event.target.value }))
               }
             />
-            <button className="primary-button" disabled={isActive} type="submit">
+            <button className="primary-button" disabled={isLocked} type="submit">
               Add stage
             </button>
           </form>
@@ -676,7 +689,7 @@ export default function WorkflowDetailPage() {
         </Section>
 
         <Section className="model-builder-panel" title="Symptoms">
-          {isActive ? <ActiveWorkflowNotice /> : null}
+          {isLocked ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitSymptom}>
             <div className="inline-fields">
               <input
@@ -714,7 +727,7 @@ export default function WorkflowDetailPage() {
                 setSymptomForm((current) => ({ ...current, allowed_values: event.target.value }))
               }
             />
-            <button className="primary-button" disabled={isActive} type="submit">
+            <button className="primary-button" disabled={isLocked} type="submit">
               Add symptom
             </button>
           </form>
@@ -726,7 +739,7 @@ export default function WorkflowDetailPage() {
         </Section>
 
         <Section className="model-builder-panel" title="Symptom Rules">
-          {isActive ? <ActiveWorkflowNotice /> : null}
+          {isLocked ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitRule}>
             <select
               required
@@ -748,7 +761,7 @@ export default function WorkflowDetailPage() {
             />
             <ConditionBuilder
               conditionFields={conditionFields}
-              disabled={isActive}
+              disabled={isLocked}
               matchMode={ruleForm.condition_match}
               onAddCondition={addConditionRow}
               onMatchModeChange={(value) =>
@@ -817,7 +830,7 @@ export default function WorkflowDetailPage() {
                 setRuleForm((current) => ({ ...current, explanation: event.target.value }))
               }
             />
-            <button className="primary-button" disabled={isActive} type="submit">
+            <button className="primary-button" disabled={isLocked} type="submit">
               Add rule
             </button>
           </form>
@@ -837,7 +850,7 @@ export default function WorkflowDetailPage() {
         </Section>
 
         <Section className="support-builder-panel" title="AI Constraints">
-          {isActive ? <ActiveWorkflowNotice /> : null}
+          {isLocked ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitBoundary}>
             <p className="muted-text">
               Add at least one workflow-level boundary that allows aftercare guidance but forbids
@@ -880,7 +893,7 @@ export default function WorkflowDetailPage() {
                 }))
               }
             />
-            <button className="primary-button" disabled={isActive} type="submit">
+            <button className="primary-button" disabled={isLocked} type="submit">
               Add boundary
             </button>
           </form>
@@ -896,7 +909,7 @@ export default function WorkflowDetailPage() {
         </Section>
 
         <Section className="support-builder-panel" title="Staff Escalation Rules">
-          {isActive ? <ActiveWorkflowNotice /> : null}
+          {isLocked ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitEscalation}>
             <p className="muted-text">
               Create one staff escalation for every HIGH or URGENT symptom rule.
@@ -969,7 +982,7 @@ export default function WorkflowDetailPage() {
                 setEscalationForm((current) => ({ ...current, message: event.target.value }))
               }
             />
-            <button className="primary-button" disabled={isActive} type="submit">
+            <button className="primary-button" disabled={isLocked} type="submit">
               Add escalation
             </button>
           </form>

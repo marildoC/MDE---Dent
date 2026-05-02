@@ -39,7 +39,7 @@ class AdminWorkflowViewSet(ModelViewSet):
 
     def _ensure_workflow_can_be_edited(self, workflow):
         if workflow and workflow.status == WorkflowStatus.ACTIVE:
-            raise ValidationError("Active workflows cannot be edited directly.")
+            raise ValidationError("Press Edit before changing an active workflow.")
 
     def perform_create(self, serializer):
         self._ensure_workflow_can_be_edited(
@@ -97,7 +97,10 @@ class TreatmentWorkflowViewSet(AdminWorkflowViewSet):
         result = validate_workflow(workflow)
         previous_status = workflow.status
 
-        if result["is_valid"] and workflow.status == WorkflowStatus.DRAFT:
+        if result["is_valid"] and workflow.status in {
+            WorkflowStatus.DRAFT,
+            WorkflowStatus.ARCHIVED,
+        }:
             workflow.status = WorkflowStatus.VALIDATED
             workflow.save(update_fields=["status", "updated_at"])
             record_audit(
@@ -117,6 +120,34 @@ class TreatmentWorkflowViewSet(AdminWorkflowViewSet):
                 "status": workflow.status,
             }
         )
+
+    @action(detail=True, methods=["post"])
+    def edit(self, request, pk=None):
+        workflow = self.get_object()
+        if workflow.status not in {WorkflowStatus.ACTIVE, WorkflowStatus.ARCHIVED}:
+            return Response(
+                {
+                    "detail": "Only active or archived workflows can be moved back to draft for editing.",
+                    "status": workflow.status,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        previous_status = workflow.status
+        workflow.status = WorkflowStatus.DRAFT
+        workflow.save(update_fields=["status", "updated_at"])
+        record_audit(
+            request.user,
+            audit_actions.WORKFLOW_VALIDATED,
+            workflow,
+            {
+                "previous_status": previous_status,
+                "new_status": workflow.status,
+                "workflow_id": workflow.id,
+                "reason": "Workflow moved back to draft for editing.",
+            },
+        )
+        return Response({"status": workflow.status})
 
     @action(detail=True, methods=["post"])
     def activate(self, request, pk=None):

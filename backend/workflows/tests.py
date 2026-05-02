@@ -534,6 +534,32 @@ class WorkflowValidationLifecycleTests(APITestCase):
         workflow.refresh_from_db()
         self.assertEqual(workflow.status, WorkflowStatus.ARCHIVED)
 
+    def test_active_workflow_can_be_moved_back_to_draft_for_editing(self):
+        workflow = self._complete_workflow()
+        workflow.status = WorkflowStatus.ACTIVE
+        workflow.save(update_fields=["status"])
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.post(f"/api/workflows/treatment-workflows/{workflow.id}/edit/")
+
+        workflow.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], WorkflowStatus.DRAFT)
+        self.assertEqual(workflow.status, WorkflowStatus.DRAFT)
+
+    def test_archived_workflow_can_be_moved_back_to_draft_for_editing(self):
+        workflow = self._complete_workflow()
+        workflow.status = WorkflowStatus.ARCHIVED
+        workflow.save(update_fields=["status"])
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.post(f"/api/workflows/treatment-workflows/{workflow.id}/edit/")
+
+        workflow.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], WorkflowStatus.DRAFT)
+        self.assertEqual(workflow.status, WorkflowStatus.DRAFT)
+
     def test_invalid_stale_validated_workflow_cannot_be_activated(self):
         workflow = self._workflow()
         workflow.status = WorkflowStatus.VALIDATED
