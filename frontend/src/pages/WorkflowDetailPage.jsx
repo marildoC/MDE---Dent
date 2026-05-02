@@ -32,13 +32,15 @@ const emptySymptom = {
   description: '',
   is_required: true,
 }
+const emptyConditionRow = { field: '', operator: '=', value: '' }
 const emptyRule = {
   stage: '',
   name: '',
-  condition: '{\n  "all": [\n    {"field": "pain_level", "operator": ">=", "value": 8}\n  ]\n}',
+  condition_match: 'all',
+  conditions: [emptyConditionRow],
   risk_level: 'HIGH',
   recommended_action: 'ESCALATE_TO_DENTIST',
-  appointment_priority: 'HIGH',
+  appointment_priority: 'NONE',
   explanation: '',
 }
 const emptyBoundary = {
@@ -69,6 +71,20 @@ const executionSteps = [
   'Audit records preserve traceability.',
 ]
 
+const syntheticConditionFields = [
+  {
+    data_type: 'INTEGER',
+    key: 'day_after_treatment',
+    label: 'Day after treatment',
+    max_value: null,
+    min_value: 0,
+  },
+]
+
+const numericOperators = ['=', '!=', '>', '>=', '<', '<=']
+const booleanOperators = ['=', '!=']
+const textOperators = ['=', '!=']
+
 function csvToList(value) {
   return value
     .split(',')
@@ -80,9 +96,147 @@ function optionalInteger(value) {
   return value === '' ? null : Number(value)
 }
 
-function Section({ title, children }) {
+function conditionFieldOptions(symptoms) {
+  return [
+    ...symptoms.map((symptom) => ({
+      ...symptom,
+      label: symptom.label || formatConstant(symptom.key),
+    })),
+    ...syntheticConditionFields,
+  ]
+}
+
+function conditionFieldLabel(field) {
+  return `${field.label || formatConstant(field.key)} (${field.key})`
+}
+
+function defaultValueForField(field) {
+  if (!field) {
+    return ''
+  }
+
+  if (field.data_type === 'BOOLEAN') {
+    return false
+  }
+
+  if (field.data_type === 'INTEGER') {
+    return field.min_value ?? 0
+  }
+
+  if (field.data_type === 'CHOICE') {
+    return choiceValuesForField(field)[0] ?? ''
+  }
+
+  return ''
+}
+
+function choiceValuesForField(field) {
+  if (!field?.allowed_values) {
+    return []
+  }
+
+  if (Array.isArray(field.allowed_values)) {
+    return field.allowed_values
+  }
+
+  return csvToList(String(field.allowed_values))
+}
+
+function operatorsForField(field) {
+  if (!field) {
+    return ['=']
+  }
+
+  if (field.data_type === 'INTEGER') {
+    return numericOperators
+  }
+
+  if (field.data_type === 'BOOLEAN') {
+    return booleanOperators
+  }
+
+  return textOperators
+}
+
+function normalizeOperator(field, operator) {
+  const operators = operatorsForField(field)
+  return operators.includes(operator) ? operator : operators[0]
+}
+
+function valueForCondition(field, value) {
+  if (field?.data_type === 'INTEGER') {
+    return Number(value)
+  }
+
+  if (field?.data_type === 'BOOLEAN') {
+    return value === true || value === 'true'
+  }
+
+  return value
+}
+
+function buildConditionObject(ruleForm, fields) {
+  return {
+    [ruleForm.condition_match]: ruleForm.conditions.map((condition) => ({
+      field: condition.field,
+      operator: normalizeOperator(
+        fields.find((field) => field.key === condition.field),
+        condition.operator,
+      ),
+      value: valueForCondition(
+        fields.find((field) => field.key === condition.field),
+        condition.value,
+      ),
+    })),
+  }
+}
+
+function formatConditionPreview(condition, matchMode = 'all') {
+  if (!condition?.[matchMode]?.length) {
+    return ''
+  }
+
+  const joiner = matchMode === 'any' ? ' OR ' : ' AND '
+  return condition[matchMode]
+    .map(
+      (item) =>
+        `${item.field} ${item.operator} ${formatConditionValue(item.value)}`,
+    )
+    .join(joiner)
+}
+
+function formatConditionValue(value) {
+  if (typeof value === 'boolean') {
+    return String(value)
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map(formatConditionValue).join(', ')}]`
+  }
+
+  if (value === null || value === undefined) {
+    return 'null'
+  }
+
+  return String(value)
+}
+
+function withFieldDefinition(row, fields) {
+  const fieldDefinition = fields.find((field) => field.key === row.field) || null
+  return {
+    ...row,
+    fieldDefinition,
+    operator: normalizeOperator(fieldDefinition, row.operator),
+  }
+}
+
+function isConditionBuilderComplete(ruleForm) {
+  return ruleForm.conditions.every((condition) => condition.field && condition.operator)
+}
+
+function Section({ className = '', title, children }) {
   return (
-    <section className="section-panel">
+    <section className={`section-panel ${className}`.trim()}>
       <h2>{title}</h2>
       {children}
     </section>
@@ -210,6 +364,59 @@ export default function WorkflowDetailPage() {
     [rules],
   )
 
+  const conditionFields = useMemo(() => conditionFieldOptions(symptoms), [symptoms])
+
+  const conditionPreview = useMemo(() => {
+    if (!isConditionBuilderComplete(ruleForm)) {
+      return ''
+    }
+
+    return formatConditionPreview(
+      buildConditionObject(ruleForm, conditionFields),
+      ruleForm.condition_match,
+    )
+  }, [conditionFields, ruleForm])
+
+  function updateConditionRow(index, patch) {
+    setRuleForm((current) => ({
+      ...current,
+      conditions: current.conditions.map((condition, conditionIndex) => {
+        if (conditionIndex !== index) {
+          return condition
+        }
+
+        const nextCondition = { ...condition, ...patch }
+        if (Object.prototype.hasOwnProperty.call(patch, 'field')) {
+          const nextField = conditionFields.find((field) => field.key === patch.field)
+          return {
+            ...nextCondition,
+            operator: normalizeOperator(nextField, nextCondition.operator),
+            value: defaultValueForField(nextField),
+          }
+        }
+
+        return nextCondition
+      }),
+    }))
+  }
+
+  function addConditionRow() {
+    setRuleForm((current) => ({
+      ...current,
+      conditions: [...current.conditions, emptyConditionRow],
+    }))
+  }
+
+  function removeConditionRow(index) {
+    setRuleForm((current) => ({
+      ...current,
+      conditions:
+        current.conditions.length > 1
+          ? current.conditions.filter((_, conditionIndex) => conditionIndex !== index)
+          : current.conditions,
+    }))
+  }
+
   async function submitAndReload(callback) {
     setError('')
     try {
@@ -279,10 +486,15 @@ export default function WorkflowDetailPage() {
   const submitRule = (event) => {
     event.preventDefault()
     submitAndReload(async () => {
+      const condition = buildConditionObject(ruleForm, conditionFields)
       await createSymptomRule({
-        ...ruleForm,
         stage: Number(ruleForm.stage),
-        condition: JSON.parse(ruleForm.condition),
+        name: ruleForm.name,
+        condition,
+        risk_level: ruleForm.risk_level,
+        recommended_action: ruleForm.recommended_action,
+        appointment_priority: ruleForm.appointment_priority,
+        explanation: ruleForm.explanation,
       })
       setRuleForm(emptyRule)
     })
@@ -449,7 +661,7 @@ export default function WorkflowDetailPage() {
           <ResourceList items={stages} getText={(stage) => `${stage.name}: day ${stage.start_day}-${stage.end_day}`} />
         </Section>
 
-        <Section title="Symptoms">
+        <Section className="model-builder-panel" title="Symptoms">
           {isActive ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitSymptom}>
             <div className="inline-fields">
@@ -493,12 +705,13 @@ export default function WorkflowDetailPage() {
             </button>
           </form>
           <ResourceList
+            className="scrollable-resource-list"
             items={symptoms}
             getText={(symptom) => `${symptom.label} (${symptom.key}) - ${formatConstant(symptom.data_type)}`}
           />
         </Section>
 
-        <Section title="Symptom Rules">
+        <Section className="model-builder-panel" title="Symptom Rules">
           {isActive ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitRule}>
             <select
@@ -519,13 +732,18 @@ export default function WorkflowDetailPage() {
               value={ruleForm.name}
               onChange={(event) => setRuleForm((current) => ({ ...current, name: event.target.value }))}
             />
-            <textarea
-              className="code-textarea"
-              required
-              value={ruleForm.condition}
-              onChange={(event) =>
-                setRuleForm((current) => ({ ...current, condition: event.target.value }))
+            <ConditionBuilder
+              conditionFields={conditionFields}
+              disabled={isActive}
+              matchMode={ruleForm.condition_match}
+              onAddCondition={addConditionRow}
+              onMatchModeChange={(value) =>
+                setRuleForm((current) => ({ ...current, condition_match: value }))
               }
+              onRemoveCondition={removeConditionRow}
+              onUpdateCondition={updateConditionRow}
+              preview={conditionPreview}
+              rows={ruleForm.conditions}
             />
             <div className="inline-fields">
               <select
@@ -555,6 +773,28 @@ export default function WorkflowDetailPage() {
                 <option value="PRIORITIZE_APPOINTMENT">Prioritize appointment</option>
               </select>
             </div>
+            <label>
+              Rule appointment priority
+              <select
+                value={ruleForm.appointment_priority}
+                onChange={(event) =>
+                  setRuleForm((current) => ({
+                    ...current,
+                    appointment_priority: event.target.value,
+                  }))
+                }
+              >
+                <option value="NONE">None</option>
+                <option value="LOW">Low</option>
+                <option value="NORMAL">Normal</option>
+                <option value="HIGH">High</option>
+                <option value="URGENT">Urgent</option>
+              </select>
+              <small className="muted-text">
+                Used on the risk assessment if this rule wins. Staff escalation priority is set
+                separately below.
+              </small>
+            </label>
             <textarea
               placeholder="Explanation"
               required
@@ -568,6 +808,7 @@ export default function WorkflowDetailPage() {
             </button>
           </form>
           <ResourceList
+            className="scrollable-resource-list"
             items={rules}
             renderItem={(rule) => (
               <span className="rule-summary">
@@ -653,27 +894,39 @@ export default function WorkflowDetailPage() {
               ))}
             </select>
             <div className="inline-fields">
-              <select
-                value={escalationForm.urgency}
-                onChange={(event) =>
-                  setEscalationForm((current) => ({ ...current, urgency: event.target.value }))
-                }
-              >
-                <option value="HIGH">High</option>
-                <option value="URGENT">Urgent</option>
-              </select>
-              <select
-                value={escalationForm.appointment_priority}
-                onChange={(event) =>
-                  setEscalationForm((current) => ({
-                    ...current,
-                    appointment_priority: event.target.value,
-                  }))
-                }
-              >
-                <option value="HIGH">High</option>
-                <option value="URGENT">Urgent</option>
-              </select>
+              <label>
+                Staff review urgency
+                <select
+                  value={escalationForm.urgency}
+                  onChange={(event) =>
+                    setEscalationForm((current) => ({ ...current, urgency: event.target.value }))
+                  }
+                >
+                  <option value="HIGH">High</option>
+                  <option value="URGENT">Urgent</option>
+                </select>
+                <small className="muted-text">
+                  Staff review urgency controls escalation queue severity.
+                </small>
+              </label>
+              <label>
+                Appointment priority
+                <select
+                  value={escalationForm.appointment_priority}
+                  onChange={(event) =>
+                    setEscalationForm((current) => ({
+                      ...current,
+                      appointment_priority: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="HIGH">High</option>
+                  <option value="URGENT">Urgent</option>
+                </select>
+                <small className="muted-text">
+                  Appointment priority controls scheduling priority if an appointment is created.
+                </small>
+              </label>
             </div>
             <textarea
               placeholder="Message"
@@ -800,18 +1053,200 @@ function ExecutionSemanticsPanel({ boundaries, escalations, rules, stages, sympt
   )
 }
 
-function ResourceList({ items, getText, renderItem }) {
+function ResourceList({ className = '', items, getText, renderItem }) {
   if (items.length === 0) {
     return <p className="muted-text">None yet.</p>
   }
 
   return (
-    <ul className="resource-list compact-list">
+    <ul className={`resource-list compact-list ${className}`.trim()}>
       {items.map((item) => (
         <li key={item.id}>
           {renderItem ? renderItem(item) : <span>{getText(item)}</span>}
         </li>
       ))}
     </ul>
+  )
+}
+
+function ConditionBuilder({
+  conditionFields,
+  disabled,
+  matchMode,
+  onAddCondition,
+  onMatchModeChange,
+  onRemoveCondition,
+  onUpdateCondition,
+  preview,
+  rows,
+}) {
+  return (
+    <div className="condition-builder">
+      <label>
+        Rule matching
+        <select
+          disabled={disabled}
+          value={matchMode}
+          onChange={(event) => onMatchModeChange(event.target.value)}
+        >
+          <option value="all">Match all conditions</option>
+          <option value="any">Match any condition</option>
+        </select>
+        <small className="muted-text">
+          {matchMode === 'all'
+            ? 'All rows must be true for the same patient report. A range like pain >= 5 and pain < 8 means 5 <= pain < 8.'
+            : 'At least one row must be true for the rule to match.'}
+        </small>
+      </label>
+
+      <div className="condition-row-list">
+        {rows.map((row, index) => (
+          <ConditionRow
+            conditionFields={conditionFields}
+            disabled={disabled}
+            index={index}
+            key={index}
+            onRemove={onRemoveCondition}
+            onUpdate={onUpdateCondition}
+            row={withFieldDefinition(row, conditionFields)}
+            showRemove={rows.length > 1}
+          />
+        ))}
+      </div>
+
+      <button
+        className="secondary-button"
+        disabled={disabled}
+        type="button"
+        onClick={onAddCondition}
+      >
+        Add condition
+      </button>
+
+      <small className="muted-text">
+        Condition preview:{' '}
+        {preview || 'Select fields to preview the generated rule condition.'}
+      </small>
+    </div>
+  )
+}
+
+function ConditionRow({
+  conditionFields,
+  disabled,
+  index,
+  onRemove,
+  onUpdate,
+  row,
+  showRemove,
+}) {
+  const operators = operatorsForField(row.fieldDefinition)
+
+  return (
+    <div className="condition-row inline-fields">
+      <select
+        disabled={disabled}
+        required
+        value={row.field}
+        onChange={(event) => onUpdate(index, { field: event.target.value })}
+      >
+        <option value="">Select field</option>
+        {conditionFields.map((field) => (
+          <option key={field.key} value={field.key}>
+            {conditionFieldLabel(field)}
+          </option>
+        ))}
+      </select>
+
+      <select
+        disabled={disabled}
+        required
+        value={row.operator}
+        onChange={(event) => onUpdate(index, { operator: event.target.value })}
+      >
+        {operators.map((operator) => (
+          <option key={operator} value={operator}>
+            {operator}
+          </option>
+        ))}
+      </select>
+
+      <ConditionValueInput
+        disabled={disabled}
+        field={row.fieldDefinition}
+        onChange={(value) => onUpdate(index, { value })}
+        value={row.value}
+      />
+
+      <button
+        className="secondary-button"
+        disabled={disabled || !showRemove}
+        type="button"
+        onClick={() => onRemove(index)}
+      >
+        Remove
+      </button>
+    </div>
+  )
+}
+
+function ConditionValueInput({ disabled, field, onChange, value }) {
+  if (field?.data_type === 'BOOLEAN') {
+    return (
+      <select
+        disabled={disabled}
+        required
+        value={String(value)}
+        onChange={(event) => onChange(event.target.value === 'true')}
+      >
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+      </select>
+    )
+  }
+
+  if (field?.data_type === 'CHOICE') {
+    const choices = choiceValuesForField(field)
+    if (choices.length) {
+      return (
+        <select
+          disabled={disabled}
+          required
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          {choices.map((choice) => (
+            <option key={choice} value={choice}>
+              {formatConstant(choice)}
+            </option>
+          ))}
+        </select>
+      )
+    }
+  }
+
+  if (field?.data_type === 'INTEGER') {
+    return (
+      <input
+        disabled={disabled}
+        max={field.max_value ?? undefined}
+        min={field.min_value ?? undefined}
+        required
+        type="number"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    )
+  }
+
+  return (
+    <input
+      disabled={disabled}
+      placeholder="Value"
+      required
+      type="text"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
   )
 }
