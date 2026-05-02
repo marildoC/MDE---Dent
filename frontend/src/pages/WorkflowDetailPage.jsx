@@ -581,7 +581,7 @@ export default function WorkflowDetailPage() {
           />
         </Section>
 
-        <Section title="AI Advice Boundaries">
+        <Section title="AI Constraints">
           {isActive ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitBoundary}>
             <select
@@ -635,7 +635,7 @@ export default function WorkflowDetailPage() {
           />
         </Section>
 
-        <Section title="Escalation Rules">
+        <Section title="Staff Escalation Rules">
           {isActive ? <ActiveWorkflowNotice /> : null}
           <form className="panel-form compact-form" onSubmit={submitEscalation}>
             <select
