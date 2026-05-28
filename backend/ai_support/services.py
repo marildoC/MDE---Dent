@@ -1,5 +1,9 @@
 from audit import actions as audit_actions
 from audit.services import record_audit
+from clinical_safety.policies import (
+    find_patient_recommendation_violation,
+    validate_patient_recommendation_text,
+)
 from workflows.models import AIAdviceBoundary, RiskLevel
 
 from .models import AdviceMessage, AdviceMessageType
@@ -54,6 +58,12 @@ def generate_advice_for_assessment(risk_assessment):
     if disclaimer:
         message = f"{message} {disclaimer}"
 
+    validate_patient_recommendation_text(
+        message,
+        stage=risk_assessment.detected_stage,
+        field_name="message",
+    )
+
     advice = AdviceMessage.objects.create(
         risk_assessment=risk_assessment,
         message=message,
@@ -97,6 +107,8 @@ def _boundary_disclaimer(risk_assessment):
     disclaimer = boundary.required_disclaimer.strip()
     lowered = disclaimer.lower()
     if any(term in lowered for term in UNSAFE_TERMS):
+        return ""
+    if find_patient_recommendation_violation(disclaimer, stage=stage):
         return ""
 
     return disclaimer

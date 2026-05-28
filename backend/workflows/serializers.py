@@ -1,6 +1,8 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from clinical_safety.policies import validate_patient_recommendation_text
+
 from .models import (
     AIAdviceBoundary,
     CareStage,
@@ -104,6 +106,19 @@ class SymptomRuleSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(exc.messages) from exc
         return value
 
+    def validate(self, attrs):
+        stage = attrs.get("stage", getattr(self.instance, "stage", None))
+        explanation = attrs.get("explanation", getattr(self.instance, "explanation", ""))
+        try:
+            validate_patient_recommendation_text(
+                explanation,
+                stage=stage,
+                field_name="explanation",
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
+        return attrs
+
 
 class AIAdviceBoundarySerializer(serializers.ModelSerializer):
     class Meta:
@@ -122,6 +137,18 @@ class AIAdviceBoundarySerializer(serializers.ModelSerializer):
         stage = attrs.get("stage", getattr(self.instance, "stage", None))
         if stage and workflow and stage.workflow_id != workflow.id:
             raise serializers.ValidationError({"stage": "Stage must belong to the selected workflow."})
+        disclaimer = attrs.get(
+            "required_disclaimer",
+            getattr(self.instance, "required_disclaimer", ""),
+        )
+        try:
+            validate_patient_recommendation_text(
+                disclaimer,
+                stage=stage,
+                field_name="required_disclaimer",
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
         return attrs
 
 
@@ -136,3 +163,17 @@ class EscalationRuleSerializer(serializers.ModelSerializer):
             "appointment_priority",
             "message",
         )
+
+    def validate(self, attrs):
+        symptom_rule = attrs.get("symptom_rule", getattr(self.instance, "symptom_rule", None))
+        message = attrs.get("message", getattr(self.instance, "message", ""))
+        stage = symptom_rule.stage if symptom_rule else None
+        try:
+            validate_patient_recommendation_text(
+                message,
+                stage=stage,
+                field_name="message",
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
+        return attrs

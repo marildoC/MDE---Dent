@@ -146,6 +146,18 @@ class AdviceMessageTests(APITestCase):
         lowered = advice.message.lower()
         self.assertFalse(any(term in lowered for term in UNSAFE_TERMS))
 
+    def test_global_policy_unsafe_boundary_disclaimer_is_not_included(self):
+        AIAdviceBoundary.objects.filter(stage=self.stage).update(
+            required_disclaimer="Continue antibiotic exolin for 3 days."
+        )
+        assessment = self.make_assessment(RiskLevel.WARNING)
+
+        advice = generate_advice_for_assessment(assessment)
+
+        lowered = advice.message.lower()
+        self.assertNotIn("exolin", lowered)
+        self.assertNotIn("antibiotic", lowered)
+
     def test_patient_can_generate_and_view_only_own_advice(self):
         own_assessment = self.make_assessment(RiskLevel.LOW)
         other_assessment = self.make_assessment(

@@ -6,6 +6,7 @@ from accounts.models import UserRole
 from ai_support.serializers import AdviceMessageSerializer
 from audit import actions as audit_actions
 from audit.services import record_audit
+from clinical_safety.policies import validate_patient_recommendation_text
 from decision_engine.serializers import RiskAssessmentSerializer
 from patients.serializers import FollowUpCaseSerializer, PatientProfileSerializer, PatientUserSerializer
 from reports.serializers import SymptomReportSerializer
@@ -80,6 +81,15 @@ class EscalationCaseSerializer(serializers.ModelSerializer):
                 validate_escalation_transition(instance.status, status)
             except DjangoValidationError as exc:
                 raise serializers.ValidationError({"status": exc.message}) from exc
+        if staff_response_changed:
+            try:
+                validate_patient_recommendation_text(
+                    validated_data.get("staff_response", ""),
+                    stage=instance.risk_assessment.detected_stage,
+                    field_name="staff_response",
+                )
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError(exc.message_dict) from exc
 
         with transaction.atomic():
             for field, value in validated_data.items():

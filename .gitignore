@@ -24,3 +24,6 @@ frontend/.env.local
 .idea/
 .DS_Store
 Thumbs.db
+
+# Project documentation policy
+*.md

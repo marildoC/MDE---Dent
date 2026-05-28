@@ -235,6 +235,107 @@ class WorkflowAPITests(APITestCase):
         self.assertEqual(AIAdviceBoundary.objects.count(), 1)
         self.assertEqual(EscalationRule.objects.count(), 1)
 
+    def test_global_policy_blocks_unsafe_rule_explanation(self):
+        self.client.force_authenticate(self.admin)
+        workflow = TreatmentWorkflow.objects.create(
+            name="Post-Extraction Follow-Up",
+            treatment_type=TreatmentType.POST_EXTRACTION,
+            created_by=self.admin,
+        )
+        stage = CareStage.objects.create(
+            workflow=workflow,
+            name="Day 0-3",
+            start_day=0,
+            end_day=3,
+        )
+
+        response = self.client.post(
+            "/api/workflows/symptom-rules/",
+            {
+                "stage": stage.id,
+                "name": "Unsafe automatic response",
+                "condition": VALID_CONDITION,
+                "risk_level": RiskLevel.WARNING,
+                "recommended_action": RecommendedAction.RECOMMEND_CONTACT,
+                "appointment_priority": AppointmentPriority.NONE,
+                "explanation": "Take antibiotik exolin 30% today.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("global dental safety rules", str(response.data))
+        self.assertEqual(SymptomRule.objects.count(), 0)
+
+    def test_global_policy_blocks_unsafe_advice_boundary_disclaimer(self):
+        self.client.force_authenticate(self.admin)
+        workflow = TreatmentWorkflow.objects.create(
+            name="Post-Extraction Follow-Up",
+            treatment_type=TreatmentType.POST_EXTRACTION,
+            created_by=self.admin,
+        )
+        stage = CareStage.objects.create(
+            workflow=workflow,
+            name="Day 4-7",
+            start_day=4,
+            end_day=7,
+        )
+
+        response = self.client.post(
+            "/api/workflows/advice-boundaries/",
+            {
+                "workflow": workflow.id,
+                "stage": stage.id,
+                "allowed_topics": ["aftercare reminders"],
+                "forbidden_topics": ["diagnosis", "prescription"],
+                "required_disclaimer": "Continue antibiotic exolin for 3 days.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("global dental safety rules", str(response.data))
+        self.assertEqual(AIAdviceBoundary.objects.count(), 0)
+
+    def test_global_policy_blocks_unsafe_escalation_rule_message(self):
+        self.client.force_authenticate(self.admin)
+        workflow = TreatmentWorkflow.objects.create(
+            name="Post-Extraction Follow-Up",
+            treatment_type=TreatmentType.POST_EXTRACTION,
+            created_by=self.admin,
+        )
+        stage = CareStage.objects.create(
+            workflow=workflow,
+            name="Day 4-7",
+            start_day=4,
+            end_day=7,
+        )
+        rule = SymptomRule.objects.create(
+            stage=stage,
+            name="High risk",
+            condition=VALID_CONDITION,
+            risk_level=RiskLevel.HIGH,
+            recommended_action=RecommendedAction.ESCALATE_TO_DENTIST,
+            appointment_priority=AppointmentPriority.HIGH,
+            explanation="High risk.",
+        )
+
+        response = self.client.post(
+            "/api/workflows/escalation-rules/",
+            {
+                "symptom_rule": rule.id,
+                "target_role": UserRole.DENTIST,
+                "urgency": AppointmentPriority.HIGH,
+                "appointment_priority": AppointmentPriority.HIGH,
+                "message": "Recommend exolin before the appointment.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("global dental safety rules", str(response.data))
+        self.assertEqual(EscalationRule.objects.count(), 0)
+
     def test_invalid_condition_shape_is_rejected(self):
         self.client.force_authenticate(self.admin)
         workflow = TreatmentWorkflow.objects.create(

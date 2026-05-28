@@ -185,6 +185,21 @@ class EscalationCaseTests(APITestCase):
         self.assertEqual(escalation.status, EscalationStatus.IN_REVIEW)
         self.assertEqual(escalation.staff_response, "Please contact the clinic today.")
 
+    def test_global_policy_blocks_unsafe_staff_response(self):
+        escalation = create_escalation_for_assessment(self.make_assessment(RiskLevel.HIGH))
+        self.client.force_authenticate(self.dentist)
+
+        response = self.client.patch(
+            f"/api/escalations/cases/{escalation.id}/",
+            {"staff_response": "Take antibiotik exolin 30% today."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("global dental safety rules", str(response.data))
+        escalation.refresh_from_db()
+        self.assertEqual(escalation.staff_response, "")
+
     def test_patient_can_view_only_own_escalation_and_cannot_update(self):
         own_escalation = create_escalation_for_assessment(self.make_assessment(RiskLevel.HIGH))
         other_escalation = create_escalation_for_assessment(
