@@ -371,14 +371,14 @@ Create a production build:
 
    $ npm run build
 
+----
 
----- 
+**Beyond the visible**
 
 .. image:: assets/footer-trace.gif
    :alt: Abstract computational trace
    :align: center
-
-**Beyond the visible**
+   :target: https://github.com/marildoC
 
 *Every creation embodies a particular way of understanding a problem — shaped by assumptions, choices, and approximations. Its value lies not only in the result it produces, but in the structure it makes visible, the limits it exposes, and the questions it leaves open.*
 
