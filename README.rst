@@ -1,16 +1,7 @@
 DentCare-MDE
 ============
 
-DentCare-MDE is a model-driven dental follow-up platform for structured
-post-extraction monitoring. It allows clinics to define validated follow-up
-workflows, assign them to patient cases, collect workflow-driven symptom
-reports, evaluate recovery signals through deterministic rules, and escalate
-risky outcomes to dental staff.
-
-The system is centered on an executable workflow model. Instead of relying on
-static forms or open-ended automated diagnosis, each active workflow defines the
-care stages, symptom vocabulary, rule logic, advice boundaries, and escalation
-policy used during runtime follow-up.
+DentCare-MDE is a clinical workflow system for structured patient follow-up and decision support. It converts care processes into explicit, auditable models that govern monitoring, symptom intake, risk evaluation, and escalation decisions. By combining rule-based reasoning with traceable operational workflows, the system strengthens consistency, accountability, and staff oversight across the care journey.
 
 Highlights
 ----------
