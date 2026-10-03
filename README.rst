@@ -372,7 +372,7 @@ Create a production build:
    $ npm run build
 
 
-----
+---- 
 
 .. image:: assets/footer-trace.gif
    :alt: Abstract computational trace
