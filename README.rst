@@ -378,4 +378,4 @@ Create a production build:
 
 *Every creation embodies a particular way of understanding a problem — shaped by assumptions, choices, and approximations. Its value lies not only in the result it produces, but in the structure it makes visible, the limits it exposes, and the questions it leaves open.*
 
-`Follow the thread → <https://github.com/marildoC>`_
+`Trace the continuum → <https://github.com/marildoC>`_
