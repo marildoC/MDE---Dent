@@ -4,7 +4,7 @@ DentCare-MDE
 DentCare-MDE is a clinical workflow system for structured patient follow-up and decision support. It converts care processes into explicit, auditable models that govern monitoring, symptom intake, risk evaluation, and escalation decisions. By combining rule-based reasoning with traceable operational workflows, the system strengthens consistency, accountability, and staff oversight across the care journey. 
 
 
-.. |Python| image:: https://img.shields.io/badge/Python-3.x-3776AB?logo=python&logoColor=white
+.. |Python| image:: https://img.shields.io/badge/Python-3.x-3776AB?logo=python&logoColor=white 
    :alt: Python
 
 .. |Django| image:: https://img.shields.io/badge/Django-6.0.4-092E20?logo=django&logoColor=white
