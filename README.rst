@@ -373,7 +373,7 @@ Create a production build:
 
 ----
 
-**Beyond the visible**
+**Beyond this work**
 
 .. image:: assets/footer-identity.gif
    :alt: Computational state-space search
