@@ -370,3 +370,12 @@ Create a production build:
 .. code-block:: console
 
    $ npm run build
+
+
+----
+
+``// end of this build — not the end of the question``
+
+*Every repository captures one answer, one experiment, one way of looking at a problem. There is always another layer to explore.*
+
+`Continue exploring → <https://github.com/marildoC>`_
