@@ -376,7 +376,7 @@ Create a production build:
 **Beyond the visible**
 
 .. image:: assets/footer-identity.gif
-   :alt: Abstract computational trace
+   :alt: Computational state-space search
    :align: center
    :target: https://github.com/marildoC
 
