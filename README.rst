@@ -206,10 +206,11 @@ Frontend checks:
    cd frontend
    npm run build
 
-Notes
------
+Design Principles
+-----------------
 
-The project intentionally keeps clinical logic bounded and explainable. The
-workflow model defines what can be collected and how reports are assessed, but
-the system does not issue diagnoses, prescribe medication, or replace dental
-staff review.
+DentCare-MDE is built on the principle that clinical workflows should be explicit, auditable, and operationally sound rather than opaque or ad hoc. The system enforces clear separation between workflow definition and runtime execution, ensuring that care logic is always traceable, consistent, and subject to validation before deployment.
+
+The architecture deliberately constrains autonomous decision-making to maintain human oversight: assessments are rule-based and interpretable, escalations are data-driven, and clinical judgment remains the responsibility of qualified dental professionals. Every action is logged, every decision is rooted in defined logic, and every outcome can be reviewed and understood.
+
+This approach prioritizes safety, accountability, and operational excellence—creating a foundation for structured, defensible clinical workflows that teams can trust and improve over time.
