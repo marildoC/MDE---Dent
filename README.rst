@@ -374,8 +374,8 @@ Create a production build:
 
 ----
 
-``// end of this build — not the end of the question``
+**Beyond the visible**
 
-*Every repository captures one answer, one experiment, one way of looking at a problem. There is always another layer to explore.*
+*Every creation embodies a particular way of understanding a problem — shaped by assumptions, choices, and approximations. Its value lies not only in the result it produces, but in the structure it makes visible, the limits it exposes, and the questions it leaves open.*
 
-`Continue exploring → <https://github.com/marildoC>`_
+`Follow the thread → <https://github.com/marildoC>`_
