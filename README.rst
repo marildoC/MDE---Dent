@@ -375,7 +375,7 @@ Create a production build:
 
 **Beyond the visible**
 
-.. image:: assets/footer-trace.gif
+.. image:: assets/footer-signature.gif 
    :alt: Abstract computational trace
    :align: center
    :target: https://github.com/marildoC
