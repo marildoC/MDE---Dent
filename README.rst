@@ -296,26 +296,6 @@ By modeling care as explicit workflows, DentCare-MDE ensures that every patient 
 
 Every outcome can be explained by reference to defined logic. This enables continuous improvement, regulatory compliance, and clinician confidence in the system's behavior.
 
----
 
-Philosophy & Intent
-====================
-
-DentCare-MDE exists to bring discipline, clarity, and accountability to clinical workflows. By modeling care as explicit, validated logic rather than improvisation or opacity, the system enables teams to:
-
-* **Operate consistently** across all patients and cases
-* **Escalate intelligently** based on data-driven criteria
-* **Maintain transparency** through comprehensive audit trails
-* **Improve over time** by refining validated workflows based on outcomes
-* **Comply confidently** with clinical and regulatory standards
-
-The result is safer patient monitoring, better-informed staff coordination, and workflows that teams can trust, understand, and defend.
-
----
-
-License & Support
 ==================
 
-This project is provided as-is for educational and clinical workflow management purposes.
-
-For questions, issues, or contributions, please refer to the GitHub repository: `marildoC/MDE---Dent <https://github.com/marildoC/MDE---Dent>`_
